@@ -22,6 +22,14 @@ def ensure_env() -> Path:
     return ENV_PATH
 
 
+def read_env_value(key: str) -> str:
+    for raw in ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith(key + "="):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
 def write_root_password(password: str) -> None:
     text = ENV_PATH.read_text(encoding="utf-8")
     line = f"ROOT_PASSWORD={password}"
@@ -50,13 +58,18 @@ def main() -> int:
         return 1
 
     generated = False
-    root_password = config.ROOT_PASSWORD
-    if not main_exists and not user_exists:
-        root_password = secrets.token_urlsafe(12)
-        write_root_password(root_password)
+    fresh = not main_exists and not user_exists
+    provided_password = read_env_value("ROOT_PASSWORD")
+    root_password = provided_password or config.ROOT_PASSWORD
+    if fresh:
+        if not provided_password:
+            root_password = secrets.token_urlsafe(12)
+            write_root_password(root_password)
+            generated = True
+            print("检测到全新安装，未指定 root 密码，已生成随机密码。")
+        else:
+            print("检测到全新安装，使用安装器填写的 root 密码。")
         config.ROOT_PASSWORD = root_password
-        generated = True
-        print("检测到全新安装，已生成随机 root 密码。")
     else:
         print("检测到已有数据库，保留现有 root 密码，不做修改。")
 
@@ -75,7 +88,7 @@ def main() -> int:
     print(f"项目目录：{ROOT}")
     print(f"数据库文件：{config.DB_DATA_DIR}")
     print(f"文本案例：{case_matcher.count_cases()} 条（新增种子 {created} 条）")
-    if generated:
+    if fresh:
         print(f"root 管理员账号：root")
         print(f"root 初始密码：{root_password}")
         print("请立即保存该密码；之后可在 .env 查看 ROOT_PASSWORD。")

@@ -12,19 +12,25 @@ Guardian-AI 是一个本地运行的 Web + FastAPI 后端反诈识别系统，�
 | 驱动 | ODBC Driver 17 for SQL Server |
 | 磁盘 | 建议预留 2 GB（依赖 + 模型 + 数据库） |
 
-> 不建议解压到 C:\Program Files 等受保护目录；请解压到有写权限的目录，例如 D:\Guardian-AI。
+> 安装目录不要选 C:\Program Files 等受保护目录；建议使用 D:\Guardian-AI 等可写目录。
 
 ## 二、安装
 
-1. 解压安装包到本地目录。
-2. 双击 install.bat。
-3. 安装程序会：
-   - 创建 .venv 虚拟环境；
-   - 安装 backend/requirements.txt 依赖；
-   - 初始化 SQL Server 数据库（AntiFraudGuard 与 user）；
-   - 生成随机 root 管理员密码并显示在安装窗口；
+1. 解压安装包到任意临时目录（例如 Downloads）。
+2. 双击 install.bat，打开安装窗口。
+3. 选择安装目录：默认 D:\Guardian-AI，可点“浏览…”安装到其他盘或目录。
+4. 按需填写：
+   - 服务端口（默认 8000）
+   - DeepSeek / Qwen Key（可留空，之后再配）
+   - root 初始密码（已预填随机值）
+   - 是否使用国内 PyPI 镜像、是否创建快捷方式、是否安装后启动
+5. 点击“开始安装”。安装器会自动：
+   - 把程序文件复制到所选目录；
+   - 创建 .venv 虚拟环境并联网下载 Python 依赖；
+   - 生成/写入 .env 配置；
+   - 在安装目录下的 database/mssql 初始化数据库；
    - 创建桌面和开始菜单的 Guardian-AI 快捷方式。
-4. 记下安装窗口显示的 root 初始密码。
+6. root 初始密码显示在安装日志末尾，请保存。若检测到已有数据库，root 密码保持不变。
 
 ## 三、启动与使用
 
