@@ -1,6 +1,8 @@
 /* Guardian-AI 浏览器悬浮窗：只在聊天页面检测当前可见聊天内容。 */
 (function () {
   'use strict';
+  if (window.__guardianAiBadgeLoaded) return;
+  window.__guardianAiBadgeLoaded = true;
 
   var API_BASE = 'http://127.0.0.1:8000';
   var APP_URL = 'http://127.0.0.1:8000/';
@@ -41,8 +43,8 @@
       var dy = event.clientY - drag.startY;
       if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
       if (!drag.moved) return;
-      var left = Math.max(4, Math.min(window.innerWidth - 48, drag.left + dx));
-      var top = Math.max(4, Math.min(window.innerHeight - 48, drag.top + dy));
+      var left = Math.max(4, Math.min(window.innerWidth - 44, drag.left + dx));
+      var top = Math.max(4, Math.min(window.innerHeight - 44, drag.top + dy));
       badge.style.left = left + 'px';
       badge.style.top = top + 'px';
       badge.style.right = 'auto';
