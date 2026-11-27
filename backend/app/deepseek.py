@@ -89,6 +89,17 @@ VISION_PROMPT = """你是反诈多模态分析助手。请识别这张聊天截�
 }
 重点关注：转账/垫付、验证码、屏幕共享、二维码收款、伪造官方页面、身份证银行卡照片、陌生链接。"""
 
+LAYOUT_PROMPT = """你是聊天窗口布局分析器。识别这张聊天软件截图中的两个区域，只输出 JSON，不要 Markdown。
+坐标使用 0 到 1 的相对比例，相对于整张图片；左上角为 (0,0)。
+{
+  "contact": {"x": 0.0, "y": 0.0, "w": 0.0, "h": 0.0},
+  "chat": {"x": 0.0, "y": 0.0, "w": 0.0, "h": 0.0},
+  "confidence": 0到1
+}
+contact = 聊天内容区左上角的对方名称/ID 区域；
+chat = 当前聊天消息主区域，必须排除左侧会话列表、搜索栏、顶部工具栏、底部输入框和发送按钮。
+如果无法判断，confidence 返回 0。"""
+
 
 def analyze_text(text: str) -> dict[str, Any]:
     payload = {
@@ -199,4 +210,25 @@ def analyze_image(image_bytes: bytes, content_type: str) -> dict[str, Any]:
     data = ai_common.extract_json(_post(payload))
     if not data:
         raise DeepSeekError("DeepSeek 视觉结果不是有效 JSON")
+    return data
+
+def analyze_chat_layout(image_bytes: bytes, content_type: str = "image/png") -> dict[str, Any]:
+    """用视觉模型识别聊天主区域和联系人区域，返回归一化坐标。"""
+    data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+    payload = {
+        "model": config.DEEPSEEK_VISION_MODEL,
+        "temperature": 0.0,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": LAYOUT_PROMPT},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ],
+    }
+    data = ai_common.extract_json(_post(payload))
+    if not data:
+        raise DeepSeekError("DeepSeek 布局识别结果不是有效 JSON")
     return data

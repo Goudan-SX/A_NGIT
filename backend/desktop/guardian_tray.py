@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import base64
 import ctypes
 import hashlib
 import json
@@ -17,6 +18,7 @@ import tempfile
 import threading
 import time
 import tkinter as tk
+from io import BytesIO
 from pathlib import Path
 from tkinter import messagebox
 from urllib.error import HTTPError, URLError
@@ -212,6 +214,64 @@ def collect_chat_texts(control, pane_left: int, top_y: int, deadline: float,
     return rows
 
 
+_LAYOUT_CACHE: dict[tuple, dict] = {}
+
+
+def detect_chat_layout(rect: tuple[int, int, int, int], window_title: str) -> dict | None:
+    """让视觉模型识别聊天范围；按窗口尺寸缓存 5 分钟。"""
+    left, top, right, bottom = rect
+    key = (window_title, right - left, bottom - top, int(time.time() // 300))
+    cached = _LAYOUT_CACHE.get(key)
+    if cached:
+        return cached
+    try:
+        from PIL import ImageGrab
+        image = ImageGrab.grab(bbox=rect)
+        if image.width > 1280:
+            image = image.resize((1280, max(1, int(image.height * 1280 / image.width))))
+        buffer = BytesIO()
+        image.save(buffer, "PNG")
+        payload = json.dumps({
+            "image_base64": base64.b64encode(buffer.getvalue()).decode("ascii"),
+            "mime": "image/png",
+        }).encode("utf-8")
+        request = Request(
+            API_BASE + "/api/monitor/layout",
+            data=payload,
+            headers={"Content-Type": "application/json", "X-Guardian-Token": security.get_local_token()},
+            method="POST",
+        )
+        with urlopen(request, timeout=60) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        layout = data.get("layout") or {}
+        if float(layout.get("confidence") or 0) < 0.35:
+            return None
+        chat = layout.get("chat") or {}
+        contact = layout.get("contact") or {}
+        if not all(isinstance(chat.get(k), (int, float)) for k in ("x", "y", "w", "h")):
+            return None
+        _LAYOUT_CACHE.clear()
+        _LAYOUT_CACHE[key] = layout
+        return layout
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _box_screen(box: dict, rect: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:
+    left, top, right, bottom = rect
+    width, height = right - left, bottom - top
+    try:
+        x = left + int(float(box["x"]) * width)
+        y = top + int(float(box["y"]) * height)
+        w = int(float(box["w"]) * width)
+        h = int(float(box["h"]) * height)
+        if w < 60 or h < 20:
+            return None
+        return (max(left, x), max(top, y), min(right, x + w), min(bottom, y + h))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _ocr_region(crop: tuple[int, int, int, int], mask_overlay: bool = False) -> str:
     from PIL import ImageGrab, ImageDraw
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
@@ -244,9 +304,15 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
         return None
     _last_ocr_at = now
     left, top, right, bottom = rect
-    pane_left = left + int((right - left) * 0.25)
-    header_text = _ocr_region((pane_left, top + 30, right, top + 125))
-    body_text = _ocr_region((pane_left, top + 115, right, bottom), mask_overlay=True)
+    layout = detect_chat_layout(rect, window_title)
+    header_box = _box_screen((layout or {}).get("contact") or {}, rect)
+    chat_box = _box_screen((layout or {}).get("chat") or {}, rect)
+    if not header_box:
+        header_box = (left + int((right - left) * 0.25), top + 30, right, top + 125)
+    if not chat_box:
+        chat_box = (left + int((right - left) * 0.25), top + 115, right, bottom)
+    header_text = _ocr_region(header_box)
+    body_text = _ocr_region(chat_box, mask_overlay=True)
     header_lines = [line.strip() for line in (header_text or "").splitlines() if line.strip()]
     contact = window_title or "未知用户"
     for line in header_lines:
@@ -274,6 +340,11 @@ def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
         if not rect:
             return None
         left, top_y, right, bottom = rect
+        # 统一视觉采集：微信、QQ、TIM 及后续需要适配的聊天软件
+        # 都先由 AI 识别聊天范围，再 OCR 联系人区和消息区；UIA 只作兜底。
+        visual = ocr_chat_snapshot(rect, window_title)
+        if visual:
+            return visual
         pane_left = left + max(240, int((right - left) * 0.25))
         texts = collect_chat_texts(top, pane_left, top_y + 35, time.monotonic() + 0.5)
         if not texts:
