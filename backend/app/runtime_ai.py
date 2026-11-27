@@ -38,6 +38,19 @@ def normalize_base_url(raw: str) -> str:
     return value
 
 
+def chat_completions_url(base_url: str) -> str:
+    """兼容“基础地址”和“完整 OpenAI 兼容端点”。
+
+    - https://api.openai.com/v1 -> .../v1/chat/completions
+    - https://text.pollinations.ai/openai -> 原样使用
+    """
+    base = (base_url or "").strip().rstrip("/")
+    lower = base.lower()
+    if lower.endswith("/chat/completions") or lower.endswith("/openai"):
+        return base
+    return base + "/chat/completions"
+
+
 def validate(*, base_url: str, api_key: str, model: str) -> None:
     if not base_url:
         raise ApiConfigError("请填写 API 地址")
@@ -128,7 +141,7 @@ def test_connection(cfg: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         "stream": False,
     }
     request = urllib.request.Request(
-        base_url + "/chat/completions",
+        chat_completions_url(base_url),
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         method="POST",
         headers={

@@ -58,7 +58,7 @@ def _post(payload: dict[str, Any]) -> str:
     cfg = _cfg()
     if not is_enabled():
         raise DeepSeekError("未配置可用的 AI 接口")
-    url = cfg["base_url"].rstrip("/") + "/chat/completions"
+    url = runtime_ai.chat_completions_url(cfg["base_url"])
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),

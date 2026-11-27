@@ -500,7 +500,8 @@
           <form class="api-form" id="api-form" autocomplete="off">
             <label class="form-label" for="api-base-url">API 地址</label>
             <input class="form-input" id="api-base-url" type="url" placeholder="https://api.openai.com/v1" spellcheck="false" />
-            <p class="api-field-tip">填写到版本号即可，例如 .../v1；末尾无需 /chat/completions。</p>
+            <p class="api-field-tip">可填基础地址（如 .../v1），也可填完整端点（如 https://text.pollinations.ai/openai）。</p>
+            <p class="api-field-tip">免费公共接口仅建议演示：匿名限流，且不要提交身份证、银行卡等敏感原文。</p>
 
             <label class="form-label" for="api-key">API Key</label>
             <div class="api-key-row">
@@ -523,6 +524,7 @@
             <div class="api-form__actions">
               <button class="btn btn--primary" id="api-save-btn" type="button">保存并测试</button>
               <button class="btn btn--ghost" id="api-test-btn" type="button">测试连接</button>
+              <button class="btn btn--ghost" id="api-preset-pollinations" type="button">使用免费公共 API</button>
               <button class="btn btn--ghost" id="api-clear-btn" type="button">重置配置</button>
             </div>
             <p class="api-autosync" id="api-autosync"><span class="api-autosync__dot"></span>输入完成后自动同步</p>
@@ -703,8 +705,8 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.6.5"></script>
-  <script src="../js/app.js?v=1.6.5"></script>
-  <script src="../js/user.js?v=1.6.5"></script>
+  <script src="../js/api.js?v=1.6.6"></script>
+  <script src="../js/app.js?v=1.6.6"></script>
+  <script src="../js/user.js?v=1.6.6"></script>
 </body>
 </html>

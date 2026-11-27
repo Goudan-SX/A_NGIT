@@ -48,6 +48,15 @@ async def lifespan(_: FastAPI):
         created = case_matcher.seed_cases()
         guardian.ensure_data()
         transaction_risk.ensure_rules()
+        # 启动时恢复管理员保存的 API 配置，保证托盘/后台任务也能直接使用
+        try:
+            root_user = user_db.get_user(1001)
+            if root_user:
+                root_api = user_db.api_config(root_user)
+                if root_api["configured"] and root_api["status"] != "error":
+                    runtime_ai.activate(root_user)
+        except Exception:  # noqa: BLE001
+            pass
         repository.add_log(
             level="success",
             event="system",
@@ -1350,7 +1359,10 @@ def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str,
         if text and text not in result["suggestions"]:
             result["suggestions"].append(text)
     result["suggestions"] = result["suggestions"][:8]
-    provider_label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
+    if provider == "deepseek":
+        provider_label = "自定义 API" if runtime_ai.has_override() else "DeepSeek V4.1"
+    else:
+        provider_label = "Qwen"
     result["engine"] = {
         "name": f"guardian-{provider}",
         "ai": True,

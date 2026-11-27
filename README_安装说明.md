@@ -59,6 +59,23 @@ Guardian-AI 是一个本地运行的 Web + FastAPI 后端反诈识别系统，�
 
 安装完成后打开网页，登录账号，在 **API** 页填写任意 OpenAI 兼容接口（地址、Key、模型），保存后自动同步并测试；配置按用户保存在本地数据库，下次登录自动恢复。
 
+### 免费公共 API 预设（Pollinations）
+
+API 页提供“**使用免费公共 API**”按钮，会自动填入：
+
+```text
+API 地址：https://text.pollinations.ai/openai
+API Key：sk-dummy（该接口不校验 Key，随便填）
+文本模型：openai
+视觉模型：openai
+```
+
+已实测可返回 OpenAI 兼容 JSON，反诈文本分析可用。注意：
+
+- 它是公开免费接口，匿名限流、可能变慢或变更，不适合正式生产。
+- 聊天原文会发送到公共第三方，请勿提交身份证、银行卡、验证码等敏感原文。
+- 正式使用时建议在 API 页换成自己的 OpenAI 兼容接口。
+
 安装器不会收集 AI Key。高级用户也可以编辑项目根目录 .env，配置 DeepSeek/Qwen 作为默认兜底：
 
 DEEPSEEK_API_KEY=sk-...

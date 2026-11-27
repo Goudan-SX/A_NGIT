@@ -437,6 +437,21 @@
     });
   }
 
+  function applyPollinationsPreset() {
+    if (!auth.user) { openAuth('login'); return; }
+    var base = $('api-base-url');
+    var key = $('api-key');
+    var model = $('api-model');
+    var vision = $('api-vision-model');
+    var tip = $('api-key-tip');
+    if (base) base.value = 'https://text.pollinations.ai/openai';
+    if (key) key.value = 'sk-dummy';
+    if (model) model.value = 'openai';
+    if (vision) vision.value = 'openai';
+    if (tip) tip.textContent = '免费公共接口不校验 Key，填 sk-dummy 即可；匿名限流，请勿提交敏感原文。';
+    saveApi(false);
+  }
+
   function scheduleAutoSync() {
     if (!auth.user) return;
     window.clearTimeout(autoSync.timer);
@@ -461,6 +476,8 @@
     if (testBtn) testBtn.addEventListener('click', testApi);
     var clearBtn = $('api-clear-btn');
     if (clearBtn) clearBtn.addEventListener('click', clearApi);
+    var presetBtn = $('api-preset-pollinations');
+    if (presetBtn) presetBtn.addEventListener('click', applyPollinationsPreset);
     var keyToggle = $('api-key-toggle');
     if (keyToggle) keyToggle.addEventListener('click', function () {
       var key = $('api-key');
