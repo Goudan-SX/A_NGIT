@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
   <title>反诈卫士 · Guardian-AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.5.0" />
+  <link rel="stylesheet" href="../css/style.css?v=1.5.1" />
 </head>
 
 <body>
@@ -37,10 +37,13 @@
       </nav>
 
       <div class="region-picker" id="region-picker">
-        <label class="region-picker__label" for="region-select">所在地</label>
         <input class="region-picker__input" id="region-select" list="province-list"
-          placeholder="选择/输入省份" autocomplete="off" />
+          placeholder="📍 选择省份" autocomplete="off" />
         <datalist id="province-list"></datalist>
+        <button class="region-picker__badge is-hidden" id="region-badge" type="button" title="点击重新选择">
+          <span id="region-badge-text"></span>
+          <span class="region-picker__close" aria-hidden="true">✕</span>
+        </button>
       </div>
 
       <p class="guard-status" id="guard-status">
@@ -552,7 +555,7 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.5.0"></script>
-  <script src="../js/app.js?v=1.5.0"></script>
+  <script src="../js/api.js?v=1.5.1"></script>
+  <script src="../js/app.js?v=1.5.1"></script>
 </body>
 </html>

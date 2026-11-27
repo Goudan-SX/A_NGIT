@@ -1823,6 +1823,8 @@
   function initRegionPicker() {
     var input = $('region-select');
     var list = $('province-list');
+    var badge = $('region-badge');
+    var badgeText = $('region-badge-text');
     if (!input || !list) return;
     API.get('/api/case-library/provinces').then(function (data) {
       (data.items || []).forEach(function (p) {
@@ -1831,15 +1833,38 @@
         list.appendChild(opt);
       });
     }).catch(function () {});
-    var saved = localStorage.getItem('guardian_province');
-    if (saved) { input.value = saved; currentProvince = saved; }
-    input.addEventListener('change', function () {
-      currentProvince = input.value.trim();
-      localStorage.setItem('guardian_province', currentProvince);
+    function showBadge(province) {
+      currentProvince = province;
+      input.classList.add('is-hidden');
+      if (badge && badgeText) {
+        badgeText.textContent = province;
+        badge.classList.remove('is-hidden');
+      }
+    }
+    function showInput() {
+      if (badge) badge.classList.add('is-hidden');
+      input.classList.remove('is-hidden');
+      input.value = '';
+      currentProvince = '';
+      localStorage.removeItem('guardian_province');
       briefTick = 0;
       loadBriefData();
       updateScienceByScore(0, '', '');
+      input.focus();
+    }
+    var saved = localStorage.getItem('guardian_province');
+    if (saved) { showBadge(saved); }
+    input.addEventListener('change', function () {
+      var val = input.value.trim();
+      if (val) {
+        localStorage.setItem('guardian_province', val);
+        showBadge(val);
+        briefTick = 0;
+        loadBriefData();
+        updateScienceByScore(0, '', '');
+      }
     });
+    if (badge) badge.addEventListener('click', showInput);
   }
 
   function loadBriefData() {
