@@ -35,6 +35,9 @@ from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
 
+# 不是有效聊天对象的名字：窗口/软件通用名称，禁止作为对话库 contact_id。
+GENERIC_CONTACT_NAMES = {"", "QQ", "TIM", "微信", "WeChat", "搜索", "发送", "未知用户"}
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -617,11 +620,13 @@ def _refine_monitor(payload: MonitorAnalyzeRequest) -> None:
             source="tray-ai",
             window=payload.window,
         )
-        if payload.window:
+        # 防御：通用名称/空值不落库，避免生成错误用户（如把软件名当联系人）。
+        contact = (payload.window or "").strip()
+        if contact and contact not in GENERIC_CONTACT_NAMES:
             conversation_store.save(
-                contact_id=payload.window,
-                contact_name=payload.window,
-                window_title=payload.window,
+                contact_id=contact,
+                contact_name=contact,
+                window_title=contact,
                 text=safe_text,
                 result=result,
             )

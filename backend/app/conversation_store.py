@@ -2,11 +2,8 @@
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
-import time
 from datetime import datetime, timedelta
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -44,16 +41,6 @@ def _init(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _normalize(text: str) -> str:
-    return re.sub(r"\s+", "", text or "")
-
-
-def _similar(a: str, b: str) -> float:
-    if not a or not b:
-        return 0.0
-    return SequenceMatcher(None, _normalize(a), _normalize(b)).ratio()
-
-
 def cleanup() -> None:
     now = datetime.now().isoformat(sep=" ", timespec="seconds")
     with _connect() as conn:
@@ -63,16 +50,17 @@ def cleanup() -> None:
 
 def save(*, contact_id: str, contact_name: str, window_title: str, text: str,
          result: dict[str, Any]) -> bool:
-    """只保存可能含诈骗信息的数据；90% 相似以最新文本为准。"""
+    """只保存可能含诈骗信息的数据；同一联系人始终以最新一次为准。
+
+    需求约定：重复内容相似度 >=90% 时以最新数据为准。UPSERT 覆盖
+    （text/risk_score/summary 等）天然满足该约定，无需单独分支。
+    """
     score = int(result.get("risk_score", 0))
     if score < MIN_STORE_SCORE or not text.strip():
         return False
     now = datetime.now()
     with _connect() as conn:
         _init(conn)
-        row = conn.execute("SELECT text FROM conversations WHERE contact_id = ?", [contact_id]).fetchone()
-        if row and _similar(str(row["text"] or ""), text) >= 0.9:
-            pass
         conn.execute(
             """
             INSERT INTO conversations

@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 import tkinter as tk
+import traceback
 from io import BytesIO
 from pathlib import Path
 from tkinter import messagebox
@@ -41,6 +42,7 @@ CONFIG_PATH = config.DATA_DIR / "tray_config.json"
 QUEUE_PATH = config.DATA_DIR / "tray_alerts.db"
 PID_PATH = config.DATA_DIR / "tray.pid"
 BACKEND_PID = config.DATA_DIR / "backend.pid"
+TRAY_LOG = config.DATA_DIR / "tray.log"
 API_BASE = "http://127.0.0.1:8000"
 POLL_SECONDS = 1.5
 ALERT_COOLDOWN = 600
@@ -50,11 +52,41 @@ _last_alert_key = ""
 _last_ocr_at = 0.0
 _last_ai_alert_id = ""
 GENERIC_CONTACTS = {"微信", "WeChat", "QQ", "TIM", "搜索", "发送", "未知用户"}
+# 窗口标题/联系人对比时常见简繁差异归一(QQ 昵称常用繁体)。
+_TITLE_SIMPLIFY = str.maketrans({"舊": "旧", "裏": "里", "後": "后", "東": "东"})
 _stop = threading.Event()
 _paused = False
 _allowed_titles: list[str] = []
 _icon: Icon | None = None
 _TRAY_MUTEX = None
+
+
+def _log(message: str) -> None:
+    """托盘运行日志：检测循环异常等关键事件必须落盘，便于排查问题。"""
+    try:
+        TRAY_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with TRAY_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(time.strftime("%Y-%m-%d %H:%M:%S ") + message + "\n")
+    except OSError:
+        pass
+
+
+def _is_self_title(value: str, window_title: str) -> bool:
+    """判断候选联系人是否其实是当前登录用户的昵称（窗口标题）。
+
+    QQ 窗口标题显示的是当前登录用户，不是对方；OCR 或视觉模型都可能
+    把它误认成联系人。按需求统一过滤：完全相同 / 互相包含 / 相似度
+    >= 0.75 / 常见简繁差异（如 旧/舊）都视为同一个人。
+    """
+    candidate = (value or "").strip().translate(_TITLE_SIMPLIFY)
+    title = (window_title or "").strip().translate(_TITLE_SIMPLIFY)
+    if not candidate or not title:
+        return False
+    if candidate == title:
+        return True
+    if len(candidate) >= 2 and (candidate in title or title in candidate):
+        return True
+    return SequenceMatcher(None, candidate, title).ratio() >= 0.75
 
 
 def load_config() -> dict:
@@ -368,22 +400,19 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
 
     contact = str((layout or {}).get("contact_text") or "").strip()[:60]
     # 先排除模型把窗口标题/当前用户昵称当联系人的情况，再回退到头部 OCR。
-    def is_self_title(value: str) -> bool:
-        if not value or not window_title:
-            return False
-        cnorm = value.strip().replace("舊", "旧")
-        wnorm = window_title.strip().replace("舊", "旧")
-        return cnorm == wnorm or (len(cnorm) >= 2 and (cnorm in wnorm or wnorm in cnorm)) or SequenceMatcher(None, cnorm, wnorm).ratio() >= 0.75
-    if contact and is_self_title(contact):
+    if contact and _is_self_title(contact, window_title):
         contact = ""
     if not contact or contact in GENERIC_CONTACTS:
         header_text = _ocr_region(header_box)
         for line in (header_text or "").splitlines():
             cleaned = line.strip(" ·|｜")
-            if len(cleaned) <= 60 and cleaned not in GENERIC_CONTACTS and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned) and not is_self_title(cleaned):
+            if (len(cleaned) <= 60 and cleaned not in GENERIC_CONTACTS
+                    and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned)
+                    and not _is_self_title(cleaned, window_title)):
                 contact = cleaned[:60]
                 break
-    if not contact or contact in GENERIC_CONTACTS or is_self_title(contact):
+    # 联系人识别失败宁可跳过本轮，也不用窗口标题兜底，避免生成错误用户。
+    if not contact or contact in GENERIC_CONTACTS or _is_self_title(contact, window_title):
         return None
 
     rows = _ocr_region_lines(chat_box, mask_overlay=True)
@@ -432,8 +461,15 @@ def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
                     header.append(value)
             elif not re.fullmatch(r"\d{1,2}:\d{2}", value):
                 messages.append(value)
-        contact = (header[0] if header else (window_title or "未知用户")).strip()[:60]
-        if contact in GENERIC_CONTACTS:
+        # 联系人候选必须排除当前用户昵称（窗口标题）与通用名称；
+        # 识别失败宁可跳过本轮，不用窗口标题兜底，避免生成错误用户。
+        contact = ""
+        for candidate in header:
+            cleaned = candidate.strip()[:60]
+            if cleaned and cleaned not in GENERIC_CONTACTS and not _is_self_title(cleaned, window_title):
+                contact = cleaned
+                break
+        if not contact:
             return None
         # 从最新消息往前截取，避免长文本把输入/请求拖慢。
         cleaned = []
@@ -645,22 +681,32 @@ def tick() -> None:
             record_alert(contact, result)
             notify(contact, result)
     # 本机告警已经触发后，再把数据同步给 Web；Web 允许延迟，但不能反超本机。
-    publish_result(text, result, title)
+    # 来源统一使用对方 ID（contact），避免把当前登录用户的窗口标题显示为来源。
+    publish_result(text, result, contact)
     if _icon:
         _icon.title = f"Guardian-AI · 监测中 · 最近 {score}%"
 
 
 def worker() -> None:
+    last_error = ""
+    last_error_at = 0.0
     try:
         with UIAutomationInitializerInThread():
             while not _stop.is_set():
                 try:
                     tick()
                 except Exception:  # noqa: BLE001
-                    pass
+                    # 循环异常必须落日志，不能静默吞掉导致“一直检测但不显示”。
+                    # 同类异常 60 秒内只记录一次，避免日志膨胀。
+                    now = time.monotonic()
+                    message = traceback.format_exc(limit=8).strip()
+                    if message != last_error or now - last_error_at > 60:
+                        last_error = message
+                        last_error_at = now
+                        _log("tick 异常：\n" + message)
                 time.sleep(POLL_SECONDS)
     except Exception:  # noqa: BLE001
-        pass
+        _log("worker 异常：\n" + traceback.format_exc(limit=8))
 
 
 def toggle_pause(icon: Icon, item: MenuItem) -> None:

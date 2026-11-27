@@ -213,11 +213,12 @@ def _serve() -> None:
         now = time.monotonic()
         repeated = (now - last_alert_at) < 60 and last_alert_at > 0
         last_alert_at = now
-        # 超过 90 分直接红框常驻；70-89 首次白框，短时间重复再转红。
+        # 分数 >=90 直接红色常驻；70-89 首次白色闪烁、5 秒自动关闭，
+        # 短时间（60 秒内）重复命中也升级为红色常驻。
         persistent = repeated or score >= 90
         clear_jobs()
-        set_colors(repeated)
-        head.configure(text="Guardian-AI · 持续高风险" if repeated else "Guardian-AI 风险提醒")
+        set_colors(persistent)
+        head.configure(text="Guardian-AI · 持续高风险" if persistent else "Guardian-AI 风险提醒")
         title.configure(text=f"疑似诈骗风险 {score}%")
         detail = summary[:220] if summary else "检测到高度可疑的诈骗行为，请立即停止转账、共享屏幕或发送验证码。"
         body.configure(text=detail + (f"\n来源：{window_title[:60]}" if window_title else ""))
