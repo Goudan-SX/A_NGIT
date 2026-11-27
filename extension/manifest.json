@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Guardian-AI 反诈悬浮窗",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "在聊天网页实时检测诈骗风险，悬浮窗显示当前风险率。",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "http://127.0.0.1:8000/*",
     "http://localhost:8000/*",
@@ -17,9 +19,15 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],

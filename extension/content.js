@@ -8,6 +8,8 @@
   var APP_URL = 'http://127.0.0.1:8000/';
   var badge = null;
   var lastText = '';
+  var lastMediaKey = '';
+  var analyzingMedia = false;
   var lastScore = null;
   var timer = null;
   var drag = { active: false, moved: false, startX: 0, startY: 0, left: 0, top: 0 };
@@ -165,6 +167,74 @@
     lastScore = null;
   }
 
+  function collectChatImages() {
+    var selectors = [
+      '.chat-bubble img',
+      '.chat-image',
+      '[class*="message"] img',
+      '[class*="msg"] img',
+      '[role="log"] img',
+      '.bubble img'
+    ];
+    var seen = {};
+    var images = [];
+    selectors.forEach(function (selector) {
+      try {
+        document.querySelectorAll(selector).forEach(function (image) {
+          if (!image || !image.src || seen[image.src]) return;
+          if (image.naturalWidth && image.naturalWidth < 80) return;
+          if (image.naturalHeight && image.naturalHeight < 80) return;
+          var rect = image.getBoundingClientRect();
+          if (rect.width < 60 || rect.height < 50) return;
+          seen[image.src] = true;
+          images.push(image.src);
+        });
+      } catch (error) {
+        /* selector may not be supported */
+      }
+    });
+    return images.slice(-2);
+  }
+
+  function analyzeMedia(text, images) {
+    if (!images.length) return;
+    var key = text + '|' + images.join('|');
+    if (key === lastMediaKey || analyzingMedia) return;
+    lastMediaKey = key;
+    analyzingMedia = true;
+    if (badge) badge.title = 'Guardian-AI：正在分析聊天图片…';
+    var form = new FormData();
+    form.append('text', text || '');
+    form.append('save', 'false');
+    form.append('client_id', 'guardian-extension');
+    var loaded = 0;
+    Promise.all(images.map(function (src, index) {
+      return fetch(src, { credentials: 'include' }).then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.blob();
+      }).then(function (blob) {
+        if (!blob || !blob.type || blob.type.indexOf('image/') !== 0) return null;
+        loaded += 1;
+        var ext = blob.type.split('/')[1] || 'png';
+        form.append('files', new File([blob], 'page-image-' + index + '.' + ext, { type: blob.type }));
+        return true;
+      }).catch(function () { return null; });
+    })).then(function () {
+      if (!loaded) throw new Error('no readable image');
+      return fetch(API_BASE + '/api/analyze', { method: 'POST', body: form });
+    }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    }).then(function (data) {
+      if (data && data.analysis) setBadge(Number(data.analysis.risk_score || 0));
+    }).catch(function () {
+      // 图片跨域读取失败时退回文本快检，不让悬浮球卡死
+      analyze(text);
+    }).finally(function () {
+      analyzingMedia = false;
+    });
+  }
+
   function analyze(text) {
     if (!text || text === lastText) return;
     lastText = text;
@@ -199,11 +269,16 @@
       return;
     }
     var text = collectMessages();
-    if (!text || text.length < 4) {
+    var images = collectChatImages();
+    if ((!text || text.length < 4) && !images.length) {
       idleBadge(true);
       return;
     }
-    analyze(text);
+    if (images.length) {
+      analyzeMedia(text, images);
+    } else {
+      analyze(text);
+    }
   }
 
   function schedule() {

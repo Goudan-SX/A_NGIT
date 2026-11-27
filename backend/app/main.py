@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 import mimetypes
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -997,6 +998,12 @@ async def analyze_multimodal(
     if before_guardian > combined["risk_score"]:
         combined["risk_score"] = before_guardian
         combined["guardian"]["modality_score"] = before_guardian
+        if combined.get("summary"):
+            combined["summary"] = re.sub(
+                r"综合风险\s*\d+%",
+                f"综合风险 {before_guardian}%",
+                combined["summary"],
+            )
         level = analyzer._level_for(before_guardian)
         combined["risk_level"] = level
         combined["risk_label"] = analyzer.LEVELS[level]["label"]
