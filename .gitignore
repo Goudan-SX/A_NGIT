@@ -45,3 +45,8 @@ desktop.ini
 !.vscode/settings.json
 backend/data/tray.pid
 @AutomationLog.txt
+backend/data/overlay.log
+backend/data/backend.log
+backend/data/launcher.log
+backend/data/overlay_state.json
+backend/data/overlay_state.tmp

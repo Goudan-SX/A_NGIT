@@ -29,6 +29,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.app import analyzer, config, ocr, security  # noqa: E402
+from backend.desktop import alert_overlay  # noqa: E402
 
 CONFIG_PATH = config.DATA_DIR / "tray_config.json"
 QUEUE_PATH = config.DATA_DIR / "tray_alerts.db"
@@ -300,7 +301,9 @@ def tick() -> None:
     if _paused or _stop.is_set():
         return
     found = foreground_window()
-    if not found or not allowed(found[0]):
+    active = bool(found and allowed(found[0]))
+    alert_overlay.set_foreground(active)
+    if not found or not active:
         return
     title = found[0]
     text = read_visible_text(title)
@@ -317,6 +320,7 @@ def tick() -> None:
     publish_result(text, result, title)
     score = int(result.get("risk_score", 0))
     if score >= 70:
+        alert_overlay.alert(score, str(result.get("summary", "")), title)
         key = digest[:16]
         if key != _last_alert_key or time.time() - _last_alert_at > ALERT_COOLDOWN:
             _last_alert_key = key
@@ -360,6 +364,7 @@ def choose_from_tray(icon: Icon, item: MenuItem) -> None:
 
 def quit_app(icon: Icon, item: MenuItem) -> None:
     _stop.set()
+    alert_overlay.shutdown()
     icon.stop()
 
 
