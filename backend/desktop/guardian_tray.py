@@ -224,8 +224,22 @@ def foreground_window() -> tuple[str, str] | None:
         return None
 
 
+# 浏览器/开发工具/资源管理器等窗口关键词，即使标题含"QQ"/"微信"也不检测
+_EXCLUDE_TITLE_KEYWORDS = (
+    "edge", "chrome", "firefox", "浏览器", "guardian", "反诈", "127.0.0.1",
+    "localhost", "workbuddy", "vscode", "intellij", "pycharm", "explorer",
+    "资源管理器", "记事本", "notepad",
+)
+
+
 def allowed(title: str) -> bool:
-    return any(item and (item == title or item in title or title in item) for item in _allowed_titles)
+    if not title:
+        return False
+    title_lower = title.lower()
+    for kw in _EXCLUDE_TITLE_KEYWORDS:
+        if kw in title_lower:
+            return False
+    return any(item and (item in title) for item in _allowed_titles)
 
 
 def collect_chat_texts(control, pane_left: int, top_y: int, deadline: float,
