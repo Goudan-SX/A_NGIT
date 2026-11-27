@@ -83,10 +83,11 @@
     return postForm('/api/analyze', form);
   }
 
-  function analyzeText(text, save) {
+  function analyzeText(text, save, fast) {
     return postJson('/api/analyze/text', {
       text: text || '',
       save: Boolean(save),
+      fast: Boolean(fast),
       client_id: getClientId()
     });
   }

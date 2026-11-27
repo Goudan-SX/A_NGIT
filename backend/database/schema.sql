@@ -119,6 +119,12 @@ BEGIN
     );
 END
 
+IF COL_LENGTH('dbo.text_cases', 'review_json') IS NULL
+    ALTER TABLE dbo.text_cases ADD review_json NVARCHAR(MAX) NULL;
+
+IF COL_LENGTH('dbo.text_cases', 'reviewed_at') IS NULL
+    ALTER TABLE dbo.text_cases ADD reviewed_at DATETIME2(0) NULL;
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_cases_active' AND object_id = OBJECT_ID('dbo.text_cases'))
     CREATE INDEX IX_cases_active ON dbo.text_cases(is_active, risk_score DESC);
 

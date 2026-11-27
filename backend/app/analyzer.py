@@ -920,8 +920,10 @@ def merge_modalities(base: dict[str, Any], parts: list[dict[str, Any]]) -> dict[
             {"image": "图片", "audio": "语音"}.get(item["type"], item["type"]) for item in parts
         ) + " 检测结果。"
 
+    base_engine = base.get("engine", {})
     part_engines = [part["result"].get("engine", {}) for part in parts]
-    ai_engines = [engine for engine in part_engines if engine.get("ai")]
+    all_engines = [base_engine] + part_engines
+    ai_engines = [engine for engine in all_engines if engine.get("ai")]
     if ai_engines:
         providers = {engine.get("provider") for engine in ai_engines if engine.get("provider")}
         provider = "deepseek" if "deepseek" in providers else "qwen"
@@ -931,6 +933,13 @@ def merge_modalities(base: dict[str, Any], parts: list[dict[str, Any]]) -> dict[
             "ai": True,
             "provider": provider,
             "note": f"{provider_label} 多模态 + 本地规则引擎",
+        }
+    elif any(engine.get("name") == "database-image-cache" for engine in part_engines):
+        base["engine"] = {
+            "name": "database-image-cache",
+            "ai": False,
+            "provider": "database",
+            "note": "图片库命中 · 复用缓存视觉结果",
         }
     elif any("ocr" in str(engine.get("note", "")).lower() for engine in part_engines):
         base["engine"] = {

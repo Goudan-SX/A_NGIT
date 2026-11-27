@@ -2439,6 +2439,29 @@ svg {
   color: var(--gray-600);
 }
 
+/* 图片放大查看 */
+.image-modal__panel {
+  width: min(1080px, 96vw);
+}
+
+.image-modal__body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px 24px;
+  overflow: auto;
+  background-color: var(--gray-50);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+.image-modal__img {
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
 /* Toast */
 .toast {
   position: fixed;

@@ -70,6 +70,7 @@ class TextAnalyzeRequest(BaseModel):
     text: str = Field(default="", max_length=20000)
     save: bool = True
     client_id: str = Field(default="anonymous", max_length=64)
+    fast: bool = False
 
 
 class FeedbackRequest(BaseModel):
@@ -306,12 +307,28 @@ def _review_case_with_ai(text: str, case: dict[str, Any],
     return None, None
 
 
-def _analyze_text_with_case(text: str, errors: list[str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """先查案例库；命中则复用案例并做 AI 二次复核，未命中才走 AI 分析。"""
+def _analyze_text_with_case(text: str, errors: list[str] | None = None,
+                            skip_ai: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+    """先查案例库；命中则复用案例并做 AI 二次复核，未命中才走 AI 分析。
+
+    skip_ai=True 时只做数据库/本地规则预判，用于前端“先出结果”的快速预览。
+    """
     match = case_matcher.lookup(text)
     if match.get("hit"):
         case = match["case"]
+        if match.get("exact"):
+            cached = case_matcher.result_from_cached_review(case, match)
+            if cached:
+                return cached, match
         result = case_matcher.result_from_case(case, match)
+        if skip_ai:
+            result["engine"] = {
+                "name": "database-match",
+                "ai": False,
+                "provider": "database",
+                "note": "数据库案例命中（本地快速预判）",
+            }
+            return result, match
         provider, review = _review_case_with_ai(text, case, errors)
         if review:
             result = _apply_ai(result, review, source="database", provider=provider)
@@ -328,6 +345,8 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None) -> tuple
             result["match"]["review_verdict"] = "confirmed" if review.get("confirmed") else "not_confirmed"
             if not review.get("confirmed"):
                 result["match"]["review_note"] = "AI 复核认为与案例不完全一致，建议结合原文判断"
+            if match.get("exact"):
+                case_matcher.save_review(case["id"], result)
         else:
             result["engine"] = {
                 "name": "database-match",
@@ -338,7 +357,8 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None) -> tuple
         return result, match
 
     result = analyzer.analyze_text(text)
-    result = _enhance_text_with_ai(result, text, errors)
+    if not skip_ai:
+        result = _enhance_text_with_ai(result, text, errors)
     result["match"] = {
         "hit": False,
         "nearest": match.get("nearest"),
@@ -351,10 +371,10 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None) -> tuple
 @app.post("/api/analyze/text")
 def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
     started = time.perf_counter()
-    result, match = _analyze_text_with_case(payload.text)
+    result, match = _analyze_text_with_case(payload.text, skip_ai=payload.fast)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     analysis_id = None
-    if payload.save and payload.text.strip():
+    if payload.save and not payload.fast and payload.text.strip():
         try:
             duration = int((time.perf_counter() - started) * 1000)
             analysis_id = repository.save_analysis(
@@ -550,7 +570,26 @@ async def analyze_multimodal(
             ai_error = ""
             ocr_error = ""
             ocr_source = ""
-            if deepseek.is_enabled():
+            image_cached = content_store.lookup_image(sha256)
+            if image_cached:
+                cached_result = dict(image_cached.get("result") or {})
+                cached_result["engine"] = {
+                    "name": "database-image-cache",
+                    "ai": False,
+                    "provider": "database",
+                    "note": "图片库命中 · 复用缓存视觉结果",
+                }
+                cached_result["image_match"] = {
+                    "hit": True,
+                    "case_id": image_cached["id"],
+                    "sha256": sha256,
+                    "cached": True,
+                }
+                image_text = str(image_cached.get("ocr_text") or "")
+                local = cached_result
+                ai_provider = "database"
+                ocr_source = "image-cache"
+            elif deepseek.is_enabled():
                 try:
                     ai_data = await asyncio.to_thread(
                         deepseek.analyze_image, data, content_type or "image/jpeg"
@@ -560,35 +599,36 @@ async def analyze_multimodal(
                     ocr_source = "deepseek-vl"
                 except Exception as exc:  # noqa: BLE001
                     ai_error = str(exc)
-            if not ai_data and qwen.is_enabled():
-                try:
-                    ai_data = await asyncio.to_thread(qwen.analyze_image, data, content_type or "image/jpeg")
-                    image_text = str(ai_data.get("ocr_text") or "")
-                    ai_provider = "qwen"
-                    ocr_source = "qwen-vl"
-                except Exception as exc:  # noqa: BLE001
-                    ai_error = str(exc)
-            if not image_text and ocr.is_available():
-                try:
-                    image_text = await asyncio.to_thread(
-                        ocr.extract_text, config.UPLOAD_DIR / stored_name
-                    )
-                    if image_text:
-                        ocr_source = "windows-ocr"
-                except Exception as exc:  # noqa: BLE001
-                    ocr_error = str(exc)
-            local = analyzer.analyze_text("\n".join([note, original_name, image_text]).strip())
-            local = _apply_ai(local, ai_data, source="image", provider=ai_provider) if ai_data else local
-            if ai_provider == "deepseek":
-                local["engine"]["note"] = "DeepSeek V4.1 视觉理解 + 本地规则引擎"
-            elif ai_provider == "qwen":
-                local["engine"]["note"] = "Qwen-VL 图片理解 + 本地规则引擎"
-            elif image_text:
-                local["engine"]["note"] = "Windows OCR 识别截图文字 + 本地规则引擎"
-            elif not (deepseek.is_enabled() or qwen.is_enabled()):
-                local["engine"]["note"] = "未配置视觉模型且 OCR 未识别到文字：图片仅完成格式与元数据校验"
-            elif ai_error:
-                local["engine"]["note"] = f"视觉模型调用失败，已降级为本地规则：{ai_error[:120]}"
+            if not image_cached:
+                if not ai_data and qwen.is_enabled():
+                    try:
+                        ai_data = await asyncio.to_thread(qwen.analyze_image, data, content_type or "image/jpeg")
+                        image_text = str(ai_data.get("ocr_text") or "")
+                        ai_provider = "qwen"
+                        ocr_source = "qwen-vl"
+                    except Exception as exc:  # noqa: BLE001
+                        ai_error = str(exc)
+                if not image_text and ocr.is_available():
+                    try:
+                        image_text = await asyncio.to_thread(
+                            ocr.extract_text, config.UPLOAD_DIR / stored_name
+                        )
+                        if image_text:
+                            ocr_source = "windows-ocr"
+                    except Exception as exc:  # noqa: BLE001
+                        ocr_error = str(exc)
+                local = analyzer.analyze_text("\n".join([note, original_name, image_text]).strip())
+                local = _apply_ai(local, ai_data, source="image", provider=ai_provider) if ai_data else local
+                if ai_provider == "deepseek":
+                    local["engine"]["note"] = "DeepSeek V4.1 视觉理解 + 本地规则引擎"
+                elif ai_provider == "qwen":
+                    local["engine"]["note"] = "Qwen-VL 图片理解 + 本地规则引擎"
+                elif image_text:
+                    local["engine"]["note"] = "Windows OCR 识别截图文字 + 本地规则引擎"
+                elif not (deepseek.is_enabled() or qwen.is_enabled()):
+                    local["engine"]["note"] = "未配置视觉模型且 OCR 未识别到文字：图片仅完成格式与元数据校验"
+                elif ai_error:
+                    local["engine"]["note"] = f"视觉模型调用失败，已降级为本地规则：{ai_error[:120]}"
             parts.append({
                 "type": "image",
                 "filename": original_name,
@@ -600,6 +640,7 @@ async def analyze_multimodal(
                     "ocr_text": image_text,
                     "ocr_source": ocr_source,
                     "ai_provider": ai_provider,
+                    "image_cached": bool(image_cached),
                     "ai_error": ai_error,
                     "ocr_error": ocr_error,
                     "chars": len(image_text),

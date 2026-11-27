@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime, timedelta
 from typing import Any
 
 from . import analyzer, db
@@ -142,6 +143,13 @@ def _row_to_case(row: dict[str, Any]) -> dict[str, Any]:
             result = value
     except json.JSONDecodeError:
         pass
+    review = {}
+    try:
+        value = json.loads(row.get("review_json") or "{}")
+        if isinstance(value, dict):
+            review = value
+    except json.JSONDecodeError:
+        pass
     return {
         "id": row["id"],
         "title": row["title"],
@@ -152,6 +160,8 @@ def _row_to_case(row: dict[str, Any]) -> dict[str, Any]:
         "scam_type": row["scam_type"],
         "summary": row["summary"],
         "result": result,
+        "review": review,
+        "reviewed_at": row.get("reviewed_at"),
         "hit_count": row.get("hit_count", 0),
     }
 
@@ -163,7 +173,8 @@ def lookup(text: str) -> dict[str, Any]:
     rows = db.query_all(
         """
         SELECT id, title, category, content, content_norm, content_hash,
-               risk_score, risk_level, scam_type, summary, result_json, hit_count
+               risk_score, risk_level, scam_type, summary, result_json,
+               review_json, reviewed_at, hit_count
         FROM dbo.text_cases
         WHERE is_active = 1
         ORDER BY id
@@ -240,8 +251,8 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
         """
         INSERT INTO dbo.text_cases
             (title, category, content, content_norm, content_hash, risk_score,
-             risk_level, scam_type, summary, result_json, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             risk_level, scam_type, summary, result_json, source, review_json, reviewed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             title,
@@ -255,6 +266,8 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
             str(result.get("summary", ""))[:1000],
             db.json_dumps(payload),
             source,
+            db.json_dumps(payload) if (result.get("engine") or {}).get("ai") else None,
+            datetime.now() if (result.get("engine") or {}).get("ai") else None,
         ],
     )
     return True
@@ -263,6 +276,54 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
 def count_cases() -> int:
     row = db.query_one("SELECT COUNT_BIG(*) AS total FROM dbo.text_cases WHERE is_active = 1")
     return int(row["total"]) if row else 0
+
+
+def _review_is_fresh(reviewed_at: Any, days: int = 7) -> bool:
+    if not reviewed_at:
+        return False
+    try:
+        value = datetime.fromisoformat(str(reviewed_at).replace("T", " ").split(".")[0])
+    except ValueError:
+        return False
+    return datetime.now() - value <= timedelta(days=days)
+
+
+def result_from_cached_review(case: dict[str, Any], match: dict[str, Any]) -> dict[str, Any] | None:
+    review = case.get("review") or {}
+    if not review or not _review_is_fresh(case.get("reviewed_at")):
+        return None
+    result = dict(review)
+    engine = result.get("engine") or {}
+    provider = engine.get("provider") or "deepseek"
+    result["engine"] = {
+        "name": "database-cached-review",
+        "ai": True,
+        "provider": provider,
+        "note": "数据库命中 · 复用 7 天内缓存的 AI 复核结果",
+    }
+    result["match"] = {
+        "hit": True,
+        "exact": match.get("exact", False),
+        "similarity": match.get("similarity", 0),
+        "case_id": case["id"],
+        "title": case["title"],
+        "category": case.get("category"),
+        "reviewed_by_ai": True,
+        "review_provider": provider,
+        "review_cached": True,
+        "review_confidence": (review.get("match") or {}).get("review_confidence"),
+        "review_verdict": (review.get("match") or {}).get("review_verdict"),
+    }
+    result.pop("id", None)
+    result.pop("created_at", None)
+    return result
+
+
+def save_review(case_id: int, result: dict[str, Any]) -> None:
+    db.execute(
+        "UPDATE dbo.text_cases SET review_json = ?, reviewed_at = SYSDATETIME() WHERE id = ?",
+        [db.json_dumps(result), case_id],
+    )
 
 
 def result_from_case(case: dict[str, Any], match: dict[str, Any]) -> dict[str, Any]:

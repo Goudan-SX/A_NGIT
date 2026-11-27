@@ -15,6 +15,7 @@
     fileSeq: 1,
     analyzing: false,
     analyzeSeq: 0,
+    fullResultSeq: 0,
     autoTimer: null,
     pendingAuto: false,
     recorder: null,
@@ -93,8 +94,11 @@
 
   function engineLabel(result) {
     var engine = (result && result.engine) || {};
+    if (engine.name === 'database-cached-review') return '数据库 + AI 缓存';
+    if (engine.name === 'database-image-cache') return '图片库缓存';
     if (engine.provider === 'deepseek') return 'DeepSeek V4.1';
     if (engine.ai) return 'Qwen 多模态';
+    if (engine.provider === 'database') return '数据库命中';
     if (String(engine.note || '').indexOf('OCR') !== -1) return 'OCR + 规则';
     return '规则引擎 v1';
   }
@@ -139,6 +143,18 @@
       return Promise.resolve(null);
     }
 
+    // 文本先用本地规则/数据库快速出结果，DeepSeek 复核返回后再覆盖，提升感知速度。
+    if (!save && !includeFiles && text.trim().length >= 2) {
+      API.analyzeText(text, false, true).then(function (data) {
+        if (seq !== state.analyzeSeq || state.fullResultSeq === seq) return;
+        state.analysis = data.analysis;
+        renderAnalysis(data.analysis);
+        setEngine('本地预判', '正在等待 DeepSeek V4.1 复核…');
+      }).catch(function () {
+        /* 快速预览失败不阻断正式分析 */
+      });
+    }
+
     setAnalyzing(true);
     setGuard('正在分析…', false);
 
@@ -154,6 +170,7 @@
     return promise.then(function (data) {
       if (seq !== state.analyzeSeq) return null;
       var result = data.analysis;
+      state.fullResultSeq = seq;
       state.analysis = result;
       state.analysisId = data.id || null;
       state.saved = Boolean(data.saved && data.id);
@@ -339,7 +356,9 @@
     if (match.hit) {
       badge.classList.add('match-badge--hit');
       var similarity = Math.round((match.similarity || 0) * 100);
-      var review = match.reviewed_by_ai ? 'AI 已复核' : 'AI 复核不可用';
+      var review = match.reviewed_by_ai
+        ? (match.review_cached ? 'AI 已复核 · 缓存' : 'AI 已复核')
+        : 'AI 复核不可用';
       label.textContent = '数据库命中 #' + match.case_id + ' · ' + (match.title || '历史案例') +
         ' · 相似度 ' + similarity + '% · ' + review;
     } else {
@@ -560,6 +579,11 @@
         preview.style.backgroundImage = 'url(' + item.url + ')';
         preview.style.backgroundSize = 'cover';
         preview.style.backgroundPosition = 'center';
+        preview.style.cursor = 'zoom-in';
+        preview.title = '点击放大查看';
+        preview.addEventListener('click', function () {
+          openImageModal(item.url, item.name);
+        });
       } else {
         preview.textContent = '声';
       }
@@ -736,7 +760,8 @@
       remove.className = 'media-card__remove';
       remove.setAttribute('aria-label', '移除文件');
       remove.textContent = '×';
-      remove.addEventListener('click', function () {
+      remove.addEventListener('click', function (event) {
+        event.stopPropagation();
         removeFile(item.id);
       });
 
@@ -753,6 +778,13 @@
       caption.appendChild(name);
       caption.appendChild(tag);
 
+      if (item.kind === 'image') {
+        preview.style.cursor = 'zoom-in';
+        preview.title = '点击放大查看';
+        preview.addEventListener('click', function () {
+          openImageModal(item.url, item.name);
+        });
+      }
       preview.appendChild(status);
       preview.appendChild(remove);
       figure.appendChild(preview);
@@ -917,6 +949,16 @@
   function openModal(id) {
     var modal = $(id);
     if (modal) modal.classList.remove('is-hidden');
+  }
+
+  function openImageModal(url, name) {
+    var image = $('image-modal-img');
+    var title = $('image-modal-title');
+    if (!image) return;
+    image.src = url || '';
+    image.alt = name || '上传图片放大预览';
+    if (title) title.textContent = name || '上传图片';
+    openModal('image-modal');
   }
 
   function closeModal(id) {
