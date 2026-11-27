@@ -30,7 +30,7 @@ URGENCY_SIGNALS = {
     "urgency", "authority_pressure", "isolation", "threat_expose",
     "high_return", "limited_quota", "account_frozen", "fake_police",
     # 直接索要钱财属于施压型行为，纳入“紧迫语气”分量
-    "transfer",
+    "transfer", "advance_payment", "emergency_money",
 }
 INFO_SIGNALS = {
     "verification_code", "password", "screen_share", "id_bank_photo",

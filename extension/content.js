@@ -64,7 +64,7 @@
 
   function isChatPage() {
     var url = (location.hostname + location.pathname + location.search).toLowerCase();
-    if (/wx\.qq\.com|web\.wechat\.com|wechat|whatsapp|telegram|discord|messenger|slack|teams|dingtalk|feishu|lark|weibo|chat|message|im\//.test(url)) return true;
+    if (/wx\.qq\.com|web\.wechat\.com|wechat|whatsapp|telegram|discord|messenger|slack|teams|dingtalk|feishu|lark|weibo|mail\.qq\.com|mail\.163\.com|mail\.126\.com|gmail\.com|outlook\.live\.com|outlook\.office\.com|chat|message|im\//.test(url)) return true;
     var selectors = [
       '#chatArea', '.chat_bd', '.chat-scroll', '[role="log"]',
       '[data-testid*="message" i]', '[data-pre-plain-text]',
@@ -78,6 +78,64 @@
         return false;
       }
     });
+  }
+
+  function isMailPage() {
+    var host = location.hostname.toLowerCase();
+    return /mail\.qq\.com|mail\.163\.com|mail\.126\.com|gmail\.com|outlook\.live\.com|outlook\.office\.com|mail\.sina\.com\.cn/.test(host);
+  }
+
+  function collectFrameText() {
+    var texts = [];
+    try {
+      Array.prototype.forEach.call(document.querySelectorAll('iframe'), function (frame) {
+        try {
+          var doc = frame.contentDocument;
+          if (!doc || !doc.body) return;
+          var text = String(doc.body.innerText || '').trim();
+          if (text.length > 40) texts.push(text);
+        } catch (error) {
+          /* cross-origin frame */
+        }
+      });
+    } catch (error) {
+      /* ignore */
+    }
+    texts.sort(function (a, b) { return b.length - a.length; });
+    return texts[0] || '';
+  }
+
+  function collectMailText() {
+    var selectors = [
+      '.mail-content', '.mailContent', '#mailContent', '#mailcontent',
+      '.qm_editor', '.mail_body', '.mail-body', '.mail-detail',
+      '.readmail', '.mail-read', '[class*="mail-detail"]',
+      '[class*="mailDetail"]', '[class*="letter-content"]',
+      '[class*="mail"] [class*="content"]'
+    ];
+    var best = '';
+    selectors.some(function (selector) {
+      try {
+        var nodes = Array.prototype.slice.call(document.querySelectorAll(selector));
+        nodes.forEach(function (node) {
+          if (!visible(node)) return;
+          var text = String(node.innerText || '').trim();
+          if (text.length > best.length && text.length < 20000) best = text;
+        });
+      } catch (error) {
+        /* ignore */
+      }
+      return false;
+    });
+    if (best.length > 20) return best.slice(-6000);
+    var frameText = collectFrameText();
+    if (frameText) return frameText.slice(-6000);
+    // 兜底：邮件正文不在已知节点时，只取当前页面可见文本
+    var bodyText = String(document.body.innerText || '').trim();
+    if (bodyText && bodyText.length < 20000 && /在吗|发件人|收件人|回复|转发|邮件/.test(bodyText)) {
+      return bodyText.slice(-6000);
+    }
+    return '';
   }
 
   function visible(node) {
@@ -268,7 +326,7 @@
       idleBadge(false);
       return;
     }
-    var text = collectMessages();
+    var text = isMailPage() ? collectMailText() : collectMessages();
     var images = collectChatImages();
     if ((!text || text.length < 4) && !images.length) {
       idleBadge(true);

@@ -42,6 +42,12 @@
     "source": "manual"
   },
   {
+    "keyword": "帮我垫",
+    "category": "风险行为",
+    "weight": 15,
+    "source": "manual"
+  },
+  {
     "keyword": "刷单返利",
     "category": "话术诱导",
     "weight": 12,
@@ -349,6 +355,24 @@
   },
   {
     "keyword": "转钱",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "手机快没电",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "明天一早还你",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "账号我发你",
     "category": "风险行为",
     "weight": 12,
     "source": "manual"
@@ -750,6 +774,24 @@
     "source": "manual"
   },
   {
+    "keyword": "住院费",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "微信限额",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "转不出去",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
     "keyword": "征信",
     "category": "话术诱导",
     "weight": 8,
@@ -763,6 +805,18 @@
   },
   {
     "keyword": "借钱",
+    "category": "风险行为",
+    "weight": 8,
+    "source": "manual"
+  },
+  {
+    "keyword": "长话短说",
+    "category": "风险行为",
+    "weight": 8,
+    "source": "manual"
+  },
+  {
+    "keyword": "在医院",
     "category": "风险行为",
     "weight": 8,
     "source": "manual"
