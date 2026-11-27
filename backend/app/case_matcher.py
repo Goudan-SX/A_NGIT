@@ -105,13 +105,13 @@ def seed_cases() -> int:
         content = item["content"]
         norm = normalize(content)
         digest = content_hash(content)
-        exists = db.query_one("SELECT id FROM dbo.scam_cases WHERE content_hash = ?", [digest])
+        exists = db.query_one("SELECT id FROM dbo.text_cases WHERE content_hash = ?", [digest])
         if exists:
             continue
         result = analyzer.analyze_text(content)
         db.execute(
             """
-            INSERT INTO dbo.scam_cases
+            INSERT INTO dbo.text_cases
                 (title, category, content, content_norm, content_hash, risk_score,
                  risk_level, scam_type, summary, result_json, source)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -164,7 +164,7 @@ def lookup(text: str) -> dict[str, Any]:
         """
         SELECT id, title, category, content, content_norm, content_hash,
                risk_score, risk_level, scam_type, summary, result_json, hit_count
-        FROM dbo.scam_cases
+        FROM dbo.text_cases
         WHERE is_active = 1
         ORDER BY id
         """
@@ -185,7 +185,7 @@ def lookup(text: str) -> dict[str, Any]:
         return {"hit": False, "nearest": None}
     case = _row_to_case(best)
     if best_score >= SIMILARITY_THRESHOLD:
-        db.execute("UPDATE dbo.scam_cases SET hit_count = hit_count + 1 WHERE id = ?", [case["id"]])
+        db.execute("UPDATE dbo.text_cases SET hit_count = hit_count + 1 WHERE id = ?", [case["id"]])
         return {
             "hit": True,
             "exact": best_exact,
@@ -227,7 +227,7 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
     stored_text = _sanitize_for_store(text, result)
     norm = normalize(stored_text)
     digest = content_hash(stored_text)
-    exists = db.query_one("SELECT id FROM dbo.scam_cases WHERE content_hash = ?", [digest])
+    exists = db.query_one("SELECT id FROM dbo.text_cases WHERE content_hash = ?", [digest])
     if exists:
         return False
     payload = dict(result)
@@ -238,7 +238,7 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
     title = f"自动收录 · {scam_type}"
     db.execute(
         """
-        INSERT INTO dbo.scam_cases
+        INSERT INTO dbo.text_cases
             (title, category, content, content_norm, content_hash, risk_score,
              risk_level, scam_type, summary, result_json, source)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -261,7 +261,7 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
 
 
 def count_cases() -> int:
-    row = db.query_one("SELECT COUNT_BIG(*) AS total FROM dbo.scam_cases WHERE is_active = 1")
+    row = db.query_one("SELECT COUNT_BIG(*) AS total FROM dbo.text_cases WHERE is_active = 1")
     return int(row["total"]) if row else 0
 
 

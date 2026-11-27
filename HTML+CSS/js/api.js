@@ -55,11 +55,28 @@
     return parseResponse(response);
   }
 
+  function getClientId() {
+    var key = 'antifraud_client_id';
+    try {
+      var value = window.localStorage.getItem(key);
+      if (!value) {
+        value = 'client-' + (window.crypto && window.crypto.randomUUID
+          ? window.crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2));
+        window.localStorage.setItem(key, value);
+      }
+      return value;
+    } catch (error) {
+      return 'anonymous';
+    }
+  }
+
   function analyzeMultimodal(text, files, save) {
     var form = new FormData();
     form.append('text', text || '');
     form.append('note', '');
     form.append('save', save ? 'true' : 'false');
+    form.append('client_id', getClientId());
     (files || []).forEach(function (item) {
       form.append('files', item.file, item.file.name);
     });
@@ -67,7 +84,11 @@
   }
 
   function analyzeText(text, save) {
-    return postJson('/api/analyze/text', { text: text || '', save: Boolean(save) });
+    return postJson('/api/analyze/text', {
+      text: text || '',
+      save: Boolean(save),
+      client_id: getClientId()
+    });
   }
 
   function downloadUrl(path) {

@@ -90,9 +90,15 @@ BEGIN
     );
 END
 
-IF OBJECT_ID('dbo.scam_cases', 'U') IS NULL
+-- 文本案例库：从旧版 scam_cases 平滑迁移
+IF OBJECT_ID('dbo.text_cases', 'U') IS NULL AND OBJECT_ID('dbo.scam_cases', 'U') IS NOT NULL
 BEGIN
-    CREATE TABLE dbo.scam_cases (
+    EXEC sp_rename 'dbo.scam_cases', 'text_cases';
+END
+
+IF OBJECT_ID('dbo.text_cases', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.text_cases (
         id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         title           NVARCHAR(200) NOT NULL,
         category        NVARCHAR(64) NOT NULL,
@@ -113,8 +119,69 @@ BEGIN
     );
 END
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_cases_active' AND object_id = OBJECT_ID('dbo.scam_cases'))
-    CREATE INDEX IX_cases_active ON dbo.scam_cases(is_active, risk_score DESC);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_cases_active' AND object_id = OBJECT_ID('dbo.text_cases'))
+    CREATE INDEX IX_cases_active ON dbo.text_cases(is_active, risk_score DESC);
+
+-- 图片案例库：保存图片指纹、OCR 文本与视觉研判结果
+IF OBJECT_ID('dbo.image_cases', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.image_cases (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        sha256          CHAR(64) NOT NULL,
+        original_name   NVARCHAR(255) NOT NULL,
+        stored_name     NVARCHAR(255) NOT NULL,
+        content_type    NVARCHAR(100) NULL,
+        size_bytes      BIGINT NOT NULL,
+        width           INT NULL,
+        height          INT NULL,
+        ocr_text        NVARCHAR(MAX) NULL,
+        risk_score      INT NOT NULL,
+        risk_level      NVARCHAR(16) NOT NULL,
+        scam_type       NVARCHAR(64) NULL,
+        summary         NVARCHAR(1000) NULL,
+        result_json     NVARCHAR(MAX) NULL,
+        source          NVARCHAR(32) NOT NULL CONSTRAINT DF_image_cases_source DEFAULT 'upload',
+        hit_count       INT NOT NULL CONSTRAINT DF_image_cases_hits DEFAULT 0,
+        is_active       BIT NOT NULL CONSTRAINT DF_image_cases_active DEFAULT 1,
+        created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_image_cases_created DEFAULT SYSDATETIME(),
+        updated_at      DATETIME2(0) NOT NULL CONSTRAINT DF_image_cases_updated DEFAULT SYSDATETIME(),
+        CONSTRAINT UQ_image_cases_hash UNIQUE (sha256)
+    );
+END
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_image_cases_active' AND object_id = OBJECT_ID('dbo.image_cases'))
+    CREATE INDEX IX_image_cases_active ON dbo.image_cases(is_active, risk_score DESC);
+
+-- 当前用户暂存库：所有输入/上传内容（文本、图片、语音）
+IF OBJECT_ID('dbo.staging_contents', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.staging_contents (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        user_key        NVARCHAR(64) NOT NULL,
+        modality        NVARCHAR(16) NOT NULL,
+        raw_text        NVARCHAR(MAX) NULL,
+        stored_name     NVARCHAR(255) NULL,
+        original_name   NVARCHAR(255) NULL,
+        content_type    NVARCHAR(100) NULL,
+        size_bytes      BIGINT NULL,
+        width           INT NULL,
+        height          INT NULL,
+        sha256          CHAR(64) NULL,
+        ocr_text        NVARCHAR(MAX) NULL,
+        transcript      NVARCHAR(MAX) NULL,
+        analysis_id     INT NULL,
+        risk_score      INT NULL,
+        risk_level      NVARCHAR(16) NULL,
+        status          NVARCHAR(16) NOT NULL CONSTRAINT DF_staging_status DEFAULT 'analyzed',
+        created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_staging_created DEFAULT SYSDATETIME()
+    );
+END
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_staging_user_time' AND object_id = OBJECT_ID('dbo.staging_contents'))
+    CREATE INDEX IX_staging_user_time ON dbo.staging_contents(user_key, created_at DESC);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_staging_modality' AND object_id = OBJECT_ID('dbo.staging_contents'))
+    CREATE INDEX IX_staging_modality ON dbo.staging_contents(modality, created_at DESC);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_analyses_created' AND object_id = OBJECT_ID('dbo.analyses'))
     CREATE INDEX IX_analyses_created ON dbo.analyses(created_at DESC);

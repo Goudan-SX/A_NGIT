@@ -38,9 +38,10 @@ def main() -> None:
         print(f"已有 {total} 条记录，跳过。需要重置请加 --force")
         return
     if force:
+        db.execute("DELETE FROM dbo.staging_contents")
         db.execute("DELETE FROM dbo.analyses")
         db.execute("DELETE FROM dbo.logs")
-        print("已清空旧的分析记录与日志")
+        print("已清空旧的分析记录、当前用户暂存与日志")
 
     created = 0
     for source, text in SAMPLES:

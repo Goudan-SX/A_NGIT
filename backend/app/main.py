@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from . import ai_common, analyzer, case_matcher, config, db, deepseek, ocr, qwen, repository
+from . import ai_common, analyzer, case_matcher, config, content_store, db, deepseek, ocr, qwen, repository
 
 STARTED_AT = time.time()
 
@@ -69,6 +69,7 @@ app.add_middleware(
 class TextAnalyzeRequest(BaseModel):
     text: str = Field(default="", max_length=20000)
     save: bool = True
+    client_id: str = Field(default="anonymous", max_length=64)
 
 
 class FeedbackRequest(BaseModel):
@@ -195,6 +196,11 @@ def health() -> dict[str, Any]:
         "database": database,
         "ai": _ai_status(),
         "cases": case_matcher.count_cases(),
+        "stores": {
+            "text_cases": case_matcher.count_cases(),
+            "image_cases": content_store.count_image_cases(),
+            "staging_contents": content_store.count_staging(),
+        },
     }
 
 
@@ -205,6 +211,11 @@ def api_config() -> dict[str, Any]:
         "version": config.APP_VERSION,
         "ai": _ai_status(),
         "cases": case_matcher.count_cases(),
+        "stores": {
+            "text_cases": case_matcher.count_cases(),
+            "image_cases": content_store.count_image_cases(),
+            "staging_contents": content_store.count_staging(),
+        },
         "limits": {
             "max_image_mb": config.MAX_IMAGE_MB,
             "max_audio_mb": config.MAX_AUDIO_MB,
@@ -354,6 +365,13 @@ def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
                 duration_ms=duration,
             )
             result["id"] = analysis_id
+            content_store.record_staging(
+                user_key=payload.client_id,
+                modality="text",
+                raw_text=payload.text,
+                analysis_id=analysis_id,
+                result=result,
+            )
             added = False
             if not match.get("hit"):
                 added = case_matcher.add_case_from_result(payload.text, result)
@@ -484,6 +502,7 @@ async def analyze_multimodal(
     text: str = Form(""),
     note: str = Form(""),
     save: bool = Form(True),
+    client_id: str = Form("anonymous"),
     files: list[UploadFile] | None = File(None),
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -494,6 +513,9 @@ async def analyze_multimodal(
     text_case_result = copy.deepcopy(base)
     parts: list[dict[str, Any]] = []
     media_rows: list[dict[str, Any]] = []
+    staging_rows: list[dict[str, Any]] = []
+    if text.strip():
+        staging_rows.append({"modality": "text", "raw_text": text})
 
     for file in files or []:
         if not file.filename:
@@ -597,6 +619,30 @@ async def analyze_multimodal(
                 "ocr_text": image_text,
                 "detail": {"engine": local.get("engine"), "ai_error": ai_error, "ocr_source": ocr_source, "ai_provider": ai_provider},
             })
+            if save:
+                content_store.record_image_case(
+                    sha256=sha256,
+                    original_name=original_name,
+                    stored_name=stored_name,
+                    content_type=content_type,
+                    size_bytes=len(data),
+                    width=width,
+                    height=height,
+                    ocr_text=image_text,
+                    result=local,
+                )
+                staging_rows.append({
+                    "modality": "image",
+                    "stored_name": stored_name,
+                    "original_name": original_name,
+                    "content_type": content_type,
+                    "size_bytes": len(data),
+                    "width": width,
+                    "height": height,
+                    "sha256": sha256,
+                    "ocr_text": image_text,
+                    "raw_text": note,
+                })
         else:
             transcript = ""
             ai_error = ""
@@ -640,6 +686,19 @@ async def analyze_multimodal(
                 "ocr_text": transcript,
                 "detail": {"engine": local.get("engine"), "ai_error": ai_error},
             })
+            if save:
+                if transcript:
+                    case_matcher.add_case_from_result(transcript, local, source="audio")
+                staging_rows.append({
+                    "modality": "audio",
+                    "stored_name": stored_name,
+                    "original_name": original_name,
+                    "content_type": content_type,
+                    "size_bytes": len(data),
+                    "sha256": sha256,
+                    "transcript": transcript,
+                    "raw_text": note,
+                })
 
     combined = analyzer.merge_modalities(base, parts)
     combined["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -658,6 +717,13 @@ async def analyze_multimodal(
                 duration_ms=duration,
             )
             combined["id"] = analysis_id
+            for row in staging_rows:
+                content_store.record_staging(
+                    user_key=client_id,
+                    analysis_id=analysis_id,
+                    result=combined,
+                    **row,
+                )
             added = False
             if text.strip() and not text_match.get("hit"):
                 added = case_matcher.add_case_from_result(text, text_case_result)

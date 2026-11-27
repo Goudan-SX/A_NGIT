@@ -20,7 +20,8 @@
 
 ### AI 管家（实时检测）
 
-- 案例库优先：每次检测先匹配 `scam_cases` 表，命中则直接复用并做 AI 复核；未命中才走 AI 分析。
+- 三类存储（同一个 `AntiFraudGuard` 数据库中的三张表）：`staging_contents`（当前用户全部内容暂存）、`text_cases`（文本案例库）、`image_cases`（图片案例库）；语音转写后写入文本库。
+- 案例库优先：每次检测先匹配 `text_cases` 表，命中则直接复用并做 AI 复核；未命中才走 AI 分析。
 - 自动扩充案例库：未命中的有效文本在检测后自动收录，下一次相同/相似内容可直接命中。
 - 文本实时分析：输入即评分，展示风险环、风险等级、诈骗类型、结论摘要。
 - 五个可解释评分维度：话术操控 20 / 资金诱导 30 / 信息窃取 25 / 渠道异常 15 / 身份伪装 10。
@@ -90,7 +91,8 @@ A_NGIT/
 │   ├── app/
 │   │   ├── main.py                # FastAPI 路由、上传、报告、静态页面
 │   │   ├── analyzer.py            # 五维评分、话术库、PII、链接、跨模态合并
-│   │   ├── case_matcher.py        # 案例库匹配、相似度、自动收录
+│   │   ├── case_matcher.py        # 文本案例匹配、相似度、自动收录
+│   │   ├── content_store.py       # 用户暂存库与图片案例库
 │   │   ├── deepseek.py            # DeepSeek 文本/视觉适配
 │   │   ├── ai_common.py           # AI JSON 解析与证据转换
 │   │   ├── qwen.py                # Qwen 语音/备用视觉适配
@@ -271,7 +273,9 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 | 表 | 用途 |
 | --- | --- |
-| `scam_cases` | 案例库：种子案例 + 自动收录内容，支持精确/相似匹配与命中次数 |
+| `staging_contents` | 当前用户暂存：文本、图片、语音原始内容与 OCR/转写结果 |
+| `text_cases` | 文本案例库：种子 + 自动收录 + 语音转写文本，支持精确/相似匹配 |
+| `image_cases` | 图片案例库：图片 SHA-256、OCR 文本、视觉研判结果与命中次数 |
 | `analyses` | 每次检测的综合结果、五维评分 JSON、误报标记、举报次数 |
 | `images` | 图片/语音文件元数据、OCR 文本、缩略图、SHA-256 |
 | `reports` | 生成的举报材料与举报渠道 |
@@ -279,7 +283,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 | `knowledge` | 反诈科普种子内容 |
 
 `backend/database/schema.sql` 可重复执行；首次启动会自动建库建表、写入科普种子与 7 条内置反诈案例。
-后续未命中的检测内容会自动写入 `scam_cases`（入库前对 PII 打码），持续扩充案例库。
+后续未命中的文本会自动写入 `text_cases`（入库前对 PII 打码），图片写入 `image_cases`，语音转写后写入 `text_cases`；当前用户的原始内容同时写入 `staging_contents`。
 
 ---
 
