@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>运行日志 · 反诈卫士</title>
+  <link rel="stylesheet" href="../css/style.css?v=1.0.0" />
+</head>
+
+<body>
+  <h1 class="visually-hidden">反诈卫士 · 运行日志</h1>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="index.html" aria-label="反诈卫士首页">
+        <span class="brand__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 4.5 6v6c0 4.2 3.1 7.6 7.5 9 4.4-1.4 7.5-4.8 7.5-9V6L12 3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </span>
+        <span class="brand__text">
+          <span class="brand__name">反诈卫士</span>
+          <span class="brand__slogan">系统运行与操作审计</span>
+        </span>
+      </a>
+
+      <nav class="site-nav" aria-label="主导航">
+        <a class="site-nav__link" href="index.html">AI 管家</a>
+        <a class="site-nav__link" href="history.html">历史记录</a>
+        <a class="site-nav__link site-nav__link--active" href="logs.html" aria-current="page">运行日志</a>
+      </nav>
+
+      <p class="guard-status">
+        <span class="guard-status__dot" aria-hidden="true"></span>
+        审计日志已开启
+      </p>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <div class="page-head">
+      <div class="page-head__heading">
+        <p class="panel__eyebrow">运行日志</p>
+        <h2 class="panel__title">检测、举报与系统事件审计</h2>
+      </div>
+      <p class="chip chip--live">
+        <span class="chip__dot" aria-hidden="true"></span>
+        实时记录 · 可追溯
+      </p>
+    </div>
+
+    <div class="stats-grid">
+      <article class="stat-card">
+        <strong class="stat-card__value" id="log-total">0</strong>
+        <span class="stat-card__label">日志总数</span>
+      </article>
+      <article class="stat-card">
+        <strong class="stat-card__value stat-card__value--danger" id="log-warning">0</strong>
+        <span class="stat-card__label">风险预警事件</span>
+      </article>
+      <article class="stat-card">
+        <strong class="stat-card__value stat-card__value--green" id="log-success">0</strong>
+        <span class="stat-card__label">成功事件</span>
+      </article>
+      <article class="stat-card">
+        <strong class="stat-card__value stat-card__value--amber" id="log-error">0</strong>
+        <span class="stat-card__label">错误事件</span>
+      </article>
+    </div>
+
+    <div class="page-toolbar">
+      <select class="form-select" id="level-filter">
+        <option value="">全部级别</option>
+        <option value="info">info · 普通</option>
+        <option value="success">success · 成功</option>
+        <option value="warning">warning · 预警</option>
+        <option value="error">error · 错误</option>
+      </select>
+      <select class="form-select" id="event-filter">
+        <option value="">全部事件</option>
+        <option value="analyze">analyze · 检测</option>
+        <option value="report">report · 举报</option>
+        <option value="export">export · 导出</option>
+        <option value="feedback">feedback · 误报反馈</option>
+        <option value="delete">delete · 删除</option>
+        <option value="system">system · 系统</option>
+        <option value="storage">storage · 存储</option>
+      </select>
+      <label class="switch" for="auto-refresh">
+        <input type="checkbox" id="auto-refresh" />
+        <span class="switch__track" aria-hidden="true"></span>
+        <span class="switch__text">每 10 秒刷新</span>
+      </label>
+      <button class="btn btn--primary btn--sm" id="refresh-btn" type="button">刷新</button>
+    </div>
+
+    <div class="legend-row" style="margin-bottom: 10px">
+      <span><i class="legend-dot" style="background:#2563eb"></i>info</span>
+      <span><i class="legend-dot" style="background:#16a34a"></i>success</span>
+      <span><i class="legend-dot" style="background:#d97706"></i>warning</span>
+      <span><i class="legend-dot" style="background:#dc2626"></i>error</span>
+    </div>
+
+    <div class="table-wrap">
+      <div class="log-list" id="log-list">
+        <div class="empty-state"><strong>正在读取日志…</strong><span>请确认后端服务已启动</span></div>
+      </div>
+    </div>
+
+    <div class="pagination" id="pagination">
+      <span id="page-meta">第 1 / 1 页</span>
+      <button class="btn btn--ghost btn--sm" id="prev-page" type="button">上一页</button>
+      <button class="btn btn--ghost btn--sm" id="next-page" type="button">下一页</button>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>赛题 11 · 反诈卫士 · 网络安全方向</p>
+    <p>日志保存在 SQL Server · 检测 / 举报 / 导出 / 误报均可追溯</p>
+    <p class="site-footer__links">
+      <a href="index.html">返回检测台</a>
+      <span aria-hidden="true">·</span>
+      <a href="history.html">历史记录</a>
+    </p>
+  </footer>
+
+  <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../js/api.js?v=1.0.0"></script>
+  <script src="../js/logs.js?v=1.0.0"></script>
+</body>
+</html>

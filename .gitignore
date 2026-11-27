@@ -6,6 +6,21 @@ memory.db
 preview-*.png
 browser-screenshots/
 
+# 环境变量与密钥
+.env
+
+# Python 缓存与虚拟环境
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 上传文件与生成的缩略图
+backend/data/uploads/*
+backend/data/thumbnails/*
+!backend/data/uploads/.gitkeep
+!backend/data/thumbnails/.gitkeep
+
 # 依赖与缓存
 node_modules/
 *.log

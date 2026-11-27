@@ -1,0 +1,1420 @@
+/* ==========================================================================
+   反诈卫士 · 主页面交互
+   负责：文本/图片/语音检测、结果渲染、举报材料、每日案例、反诈问答、知识宣传
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var API = window.AntiFraudAPI;
+
+  var state = {
+    analysis: null,
+    analysisId: null,
+    saved: false,
+    files: [],
+    fileSeq: 1,
+    analyzing: false,
+    analyzeSeq: 0,
+    autoTimer: null,
+    recorder: null,
+    recordChunks: [],
+    report: null
+  };
+
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function setText(el, value) {
+    if (el) el.textContent = value == null ? '' : String(value);
+  }
+
+  function show(el) {
+    if (el) el.classList.remove('is-hidden');
+  }
+
+  function hide(el) {
+    if (el) el.classList.add('is-hidden');
+  }
+
+  function toast(message, type) {
+    var el = $('toast');
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'toast' + (type ? ' toast--' + type : '');
+    show(el);
+    window.clearTimeout(toast._timer);
+    toast._timer = window.setTimeout(function () {
+      hide(el);
+    }, 3600);
+  }
+
+  function riskMeta(level) {
+    return API.riskMeta(level);
+  }
+
+  function dimensionName(key) {
+    var map = {
+      script: '话术操控',
+      financial: '资金诱导',
+      info: '信息窃取',
+      channel: '渠道异常',
+      identity: '身份伪装'
+    };
+    return map[key] || key;
+  }
+
+  function countChat(text) {
+    var lines = String(text || '').split('\n').filter(function (line) {
+      return line.trim().length > 0;
+    });
+    var chars = String(text || '').replace(/\s/g, '').length;
+    return { messages: lines.length, chars: chars };
+  }
+
+  function updateChatStats() {
+    var input = $('chat-text');
+    if (!input) return;
+    var stats = countChat(input.value);
+    setText($('chat-stats'), stats.messages + ' 条消息 · 约 ' + stats.chars + ' 字');
+  }
+
+  function setGuard(text, ok) {
+    var el = $('guard-status');
+    var label = $('guard-status-text');
+    if (label) label.textContent = text;
+    if (el) {
+      el.style.color = ok ? '' : 'var(--amber-600)';
+      el.style.backgroundColor = ok ? '' : 'var(--amber-50)';
+      el.style.borderColor = ok ? '' : 'rgba(217, 119, 6, 0.18)';
+    }
+  }
+
+  function engineLabel(result) {
+    var engine = (result && result.engine) || {};
+    if (engine.ai) return 'Qwen 多模态';
+    if (String(engine.note || '').indexOf('OCR') !== -1) return 'OCR + 规则';
+    return '规则引擎 v1';
+  }
+
+  function setEngine(text, note) {
+    setText($('engine-chip-text'), text);
+    var chip = $('engine-chip');
+    if (chip) chip.title = note || text;
+  }
+
+  function setAnalyzing(active) {
+    state.analyzing = active;
+    var btn = $('analyze-btn');
+    if (!btn) return;
+    btn.disabled = active;
+    btn.style.opacity = active ? '0.7' : '';
+    if (active) {
+      setEngine('分析中…', '正在调用检测服务');
+    }
+  }
+
+  function setButtonEnabled(id, enabled) {
+    var el = $(id);
+    if (el) el.disabled = !enabled;
+  }
+
+  /* ------------------------------------------------------------------------
+   * 一、检测与结果渲染
+   * ---------------------------------------------------------------------- */
+  function analyze(save, includeFiles) {
+    var input = $('chat-text');
+    var text = input ? input.value : '';
+    var files = includeFiles ? state.files : [];
+    var seq = ++state.analyzeSeq;
+    var hasInput = text.trim().length > 0 || files.length > 0;
+    if (!hasInput) {
+      renderEmpty();
+      return Promise.resolve(null);
+    }
+
+    setAnalyzing(true);
+    setGuard('正在分析…', false);
+
+    var promise;
+    if (files.length > 0) {
+      promise = API.analyzeMultimodal(text, files.map(function (item) {
+        return { file: item.file };
+      }), save);
+    } else {
+      promise = API.analyzeText(text, save);
+    }
+
+    return promise.then(function (data) {
+      if (seq !== state.analyzeSeq) return null;
+      var result = data.analysis;
+      state.analysis = result;
+      state.analysisId = data.id || null;
+      state.saved = Boolean(data.saved && data.id);
+      if (result.modalities && result.modalities.length && files.length) {
+        result.modalities.forEach(function (modality, index) {
+          var item = files[index];
+          if (!item) return;
+          item.status = 'done';
+          item.score = modality.score;
+          item.summary = modality.summary;
+          item.ocrText = modality.text || '';
+          item.modalityType = modality.type;
+        });
+      }
+      renderAnalysis(result);
+      renderMedia();
+      setEngine(engineLabel(result),
+        (result.engine && result.engine.note) || '本地规则引擎 + Qwen 适配');
+      setGuard('防护已就绪', true);
+      if (data.errors && data.errors.length) {
+        toast(data.errors.join('；'), 'error');
+      }
+      return result;
+    }).catch(function (error) {
+      if (seq !== state.analyzeSeq) return null;
+      setGuard('检测服务未连接', false);
+      setEngine('离线演示', '请启动 backend/run.py 后刷新页面');
+      toast('检测失败：' + error.message, 'error');
+      renderFallback(text);
+      return null;
+    }).finally(function () {
+      if (seq === state.analyzeSeq) {
+        setAnalyzing(false);
+      }
+    });
+  }
+
+  function renderAnalysis(result) {
+    if (!result) {
+      renderEmpty();
+      return;
+    }
+    var level = riskMeta(result.risk_level);
+    var score = Number(result.risk_score || 0);
+    var ring = $('risk-ring');
+    var scoreEl = $('risk-score');
+    if (scoreEl) {
+      scoreEl.innerHTML = score + '<span>%</span>';
+      scoreEl.style.color = level.color;
+    }
+    if (ring) {
+      ring.classList.remove('risk-ring--low', 'risk-ring--medium', 'risk-ring--high', 'risk-ring--critical');
+      ring.classList.add('risk-ring--' + level.key);
+      ring.style.setProperty('--score', score);
+      ring.setAttribute('aria-label', '综合诈骗风险 ' + score + '%，' + (result.risk_label || level.label));
+    }
+
+    var levelEl = $('risk-level');
+    if (levelEl) {
+      levelEl.classList.remove('risk-summary__level--low', 'risk-summary__level--medium',
+        'risk-summary__level--high', 'risk-summary__level--critical');
+      levelEl.classList.add('risk-summary__level--' + level.key);
+      levelEl.style.color = level.color;
+    }
+    setText($('risk-level-text'), (result.risk_label || level.label) + ' · ' + (result.risk_hint || ''));
+
+    var title = result.scam_type && result.scam_type.indexOf('暂无') === -1
+      ? '疑似「' + result.scam_type + '」诈骗'
+      : '暂未识别到典型诈骗话术';
+    setText($('risk-title'), title);
+    setText($('risk-desc'), result.summary || '');
+
+    renderDimensions(result.dimensions || []);
+    renderKeywords(result.matched_keywords || [], result.signals || []);
+    renderEvidence(result.signals || []);
+    renderPii(result.pii || []);
+    renderLinks(result.links || []);
+    renderSuggestions(result.suggestions || []);
+    renderRiskMedia();
+
+    setButtonEnabled('report-btn', true);
+    setButtonEnabled('export-btn', true);
+    setButtonEnabled('copy-btn', true);
+    setButtonEnabled('feedback-btn', true);
+
+    var engine = result.engine || {};
+    setEngine(engineLabel(result), engine.note || '');
+  }
+
+  function renderEmpty() {
+    state.analysis = null;
+    state.analysisId = null;
+    state.saved = false;
+    setText($('risk-score'), '0');
+    var scoreEl = $('risk-score');
+    if (scoreEl) scoreEl.innerHTML = '0<span>%</span>';
+    var ring = $('risk-ring');
+    if (ring) {
+      ring.style.setProperty('--score', 0);
+      ring.classList.remove('risk-ring--medium', 'risk-ring--high', 'risk-ring--critical');
+      ring.classList.add('risk-ring--low');
+    }
+    setText($('risk-level-text'), '等待检测');
+    setText($('risk-title'), '粘贴可疑内容后开始检测');
+    setText($('risk-desc'), '系统会从话术操控、资金诱导、信息窃取、渠道异常、身份伪装五个维度给出可解释评分。');
+    setText($('keyword-count'), '0 项命中');
+    setText($('evidence-count'), '0 条');
+    setText($('image-count'), '0 项');
+    setText($('suggestion-count'), '0 条');
+    var list = $('keyword-list');
+    if (list) list.innerHTML = '<li class="empty-inline">暂未命中高危词汇</li>';
+    var evidence = $('evidence-list');
+    if (evidence) evidence.innerHTML = '<li class="empty-inline">检测后在这里展示命中原文与风险权重</li>';
+    var suggestions = $('suggestion-list');
+    if (suggestions) suggestions.innerHTML = '<li class="empty-inline">检测后给出针对性处置建议</li>';
+    renderDimensions([]);
+    renderPii([]);
+    renderLinks([]);
+    hide($('pii-section'));
+    hide($('link-section'));
+    ['report-btn', 'export-btn', 'copy-btn', 'feedback-btn'].forEach(function (id) {
+      setButtonEnabled(id, false);
+    });
+  }
+
+  function renderFallback(text) {
+    var sample = text || '';
+    var high = /刷单|垫付|验证码|屏幕共享|冻结/.test(sample);
+    var fallback = {
+      risk_score: high ? 86 : 18,
+      risk_level: high ? 'high' : 'low',
+      risk_label: high ? '高风险' : '低风险',
+      risk_hint: high ? '建议立即停止沟通' : '暂未发现明显风险',
+      scam_type: high ? '刷单返利 + 屏幕共享' : '暂无明确诈骗类型',
+      summary: high
+        ? '离线演示结果：文本命中刷单、垫付、验证码、屏幕共享等高风险话术，请立即停止沟通与转账。'
+        : '离线演示结果：暂未发现明显风险特征，请启动后端服务获得完整研判。',
+      dimensions: [
+        { key: 'script', name: '话术操控', score: high ? 8 : 2, max: 20, desc: '制造紧迫感或高收益承诺' },
+        { key: 'financial', name: '资金诱导', score: high ? 30 : 0, max: 30, desc: '要求转账、垫付、充值' },
+        { key: 'info', name: '信息窃取', score: high ? 25 : 0, max: 25, desc: '索要验证码、密码或屏幕共享' },
+        { key: 'channel', name: '渠道异常', score: high ? 15 : 2, max: 15, desc: '陌生链接、非官方 App' },
+        { key: 'identity', name: '身份伪装', score: high ? 8 : 0, max: 10, desc: '冒充客服、公检法或熟人' }
+      ],
+      matched_keywords: high ? ['刷单返利', '垫付资金', '验证码', '屏幕共享', '账户冻结'] : [],
+      signals: high ? [
+        { label: '刷单返利', dim: 'financial', weight: 18, severity: 'critical', count: 1, evidence: '刷单返利', protective: false },
+        { label: '要求垫付资金', dim: 'financial', weight: 15, severity: 'critical', count: 1, evidence: '先垫付后返还', protective: false },
+        { label: '索要验证码', dim: 'info', weight: 20, severity: 'critical', count: 1, evidence: '把验证码发给我', protective: false },
+        { label: '要求屏幕共享', dim: 'info', weight: 20, severity: 'critical', count: 1, evidence: '开启屏幕共享', protective: false }
+      ] : [],
+      pii: [],
+      links: [],
+      suggestions: high ? [
+        '立即停止与对方沟通，不要转账、不要提供验证码、不要开启屏幕共享。',
+        '通过官方渠道核实身份，必要时拨打 96110 或 110。',
+        '保留聊天记录与转账凭证，尽快举报。'
+      ] : ['请保持警惕，涉及转账、验证码、屏幕共享时务必核实。'],
+      engine: { name: 'offline-demo', ai: false, note: '后端未连接，展示离线演示结果' },
+      modalities: []
+    };
+    state.analysis = fallback;
+    renderAnalysis(fallback);
+    renderMedia();
+  }
+
+  function renderDimensions(items) {
+    var list = $('dimension-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!items.length) {
+      var li = document.createElement('li');
+      li.className = 'dimension';
+      li.innerHTML = '<span class="dimension__name">等待检测</span>' +
+        '<span class="dimension__bar"><i style="width:0%"></i></span><span class="dimension__score">0</span>';
+      list.appendChild(li);
+      return;
+    }
+    items.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'dimension';
+      var percent = item.max ? Math.round((item.score / item.max) * 100) : 0;
+      if (percent >= 80) li.classList.add('dimension--danger');
+      else if (percent >= 45) li.classList.add('dimension--warn');
+
+      var name = document.createElement('span');
+      name.className = 'dimension__name';
+      name.textContent = item.name;
+      name.title = item.desc || '';
+
+      var bar = document.createElement('span');
+      bar.className = 'dimension__bar';
+      var fill = document.createElement('i');
+      fill.style.width = Math.min(100, percent) + '%';
+      bar.appendChild(fill);
+
+      var score = document.createElement('span');
+      score.className = 'dimension__score';
+      score.textContent = item.score + '/' + item.max;
+      score.title = item.desc || '';
+
+      li.appendChild(name);
+      li.appendChild(bar);
+      li.appendChild(score);
+      list.appendChild(li);
+    });
+  }
+
+  function renderKeywords(keywords, signals) {
+    var list = $('keyword-list');
+    if (!list) return;
+    list.innerHTML = '';
+    var severity = {};
+    signals.forEach(function (item) {
+      if (item.label) severity[item.label] = item.severity || 'medium';
+    });
+    keywords.forEach(function (word) {
+      var li = document.createElement('li');
+      var level = severity[word];
+      var cls = 'tag--danger';
+      if (level === 'low') cls = 'tag--warn';
+      if (level === 'medium') cls = 'tag--warn';
+      li.className = 'tag ' + cls;
+      li.textContent = word;
+      list.appendChild(li);
+    });
+    if (!keywords.length) {
+      list.innerHTML = '<li class="empty-inline">暂未命中高危词汇</li>';
+    }
+    setText($('keyword-count'), keywords.length + ' 项命中');
+  }
+
+  function renderEvidence(signals) {
+    var list = $('evidence-list');
+    if (!list) return;
+    list.innerHTML = '';
+    signals.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'evidence' + (item.severity === 'critical' || item.severity === 'high' ? ' evidence--danger' : '') +
+        (item.protective ? ' evidence--protective' : '');
+
+      var head = document.createElement('div');
+      head.className = 'evidence__head';
+      var label = document.createElement('span');
+      label.className = 'evidence__label';
+      label.textContent = item.label + (item.protective ? '（科普语境）' : '');
+      var weight = document.createElement('span');
+      weight.className = 'evidence__weight';
+      weight.textContent = '+' + item.weight;
+      head.appendChild(label);
+      head.appendChild(weight);
+
+      var text = document.createElement('p');
+      text.className = 'evidence__text';
+      text.textContent = item.evidence || '—';
+
+      var meta = document.createElement('p');
+      meta.className = 'evidence__meta';
+      meta.textContent = dimensionName(item.dim) + ' · 命中 ' + (item.count || 1) + ' 次' +
+        (item.source === 'qwen' ? ' · Qwen 语义识别' : '');
+
+      li.appendChild(head);
+      li.appendChild(text);
+      li.appendChild(meta);
+      list.appendChild(li);
+    });
+    if (!signals.length) {
+      list.innerHTML = '<li class="empty-inline">未命中明显风险特征</li>';
+    }
+    setText($('evidence-count'), signals.length + ' 条');
+  }
+
+  function renderPii(items) {
+    var section = $('pii-section');
+    var list = $('pii-list');
+    if (!section || !list) return;
+    list.innerHTML = '';
+    if (!items.length) {
+      hide(section);
+      setText($('pii-count'), '0 处');
+      return;
+    }
+    show(section);
+    var total = 0;
+    items.forEach(function (item) {
+      total += item.count || 1;
+      var li = document.createElement('li');
+      li.className = 'pii-item';
+      var main = document.createElement('span');
+      main.className = 'pii-item__main';
+      var label = document.createElement('span');
+      label.className = 'pii-item__label';
+      label.textContent = item.label;
+      var value = document.createElement('span');
+      value.className = 'pii-item__value';
+      value.textContent = item.value;
+      main.appendChild(label);
+      main.appendChild(value);
+      var count = document.createElement('span');
+      count.className = 'pii-item__count';
+      count.textContent = '×' + (item.count || 1);
+      li.appendChild(main);
+      li.appendChild(count);
+      li.title = item.advice || '';
+      list.appendChild(li);
+    });
+    setText($('pii-count'), total + ' 处');
+  }
+
+  function renderLinks(items) {
+    var section = $('link-section');
+    var list = $('link-list');
+    if (!section || !list) return;
+    list.innerHTML = '';
+    if (!items.length) {
+      hide(section);
+      setText($('link-count'), '0 条');
+      return;
+    }
+    show(section);
+    items.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'link-item';
+      var url = document.createElement('span');
+      url.className = 'link-item__url';
+      url.textContent = item.url;
+      url.title = item.url;
+      var reason = document.createElement('p');
+      reason.className = 'link-item__reasons';
+      reason.textContent = '风险 ' + item.risk + '% · ' + (item.reasons || []).join('；');
+      li.appendChild(url);
+      li.appendChild(reason);
+      list.appendChild(li);
+    });
+    setText($('link-count'), items.length + ' 条');
+  }
+
+  function renderSuggestions(items) {
+    var list = $('suggestion-list');
+    if (!list) return;
+    list.innerHTML = '';
+    items.forEach(function (text) {
+      var li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    });
+    if (!items.length) {
+      list.innerHTML = '<li class="empty-inline">暂无处置建议</li>';
+    }
+    setText($('suggestion-count'), items.length + ' 条');
+  }
+
+  function renderRiskMedia() {
+    var list = $('risk-media');
+    if (!list) return;
+    list.innerHTML = '';
+    var items = state.files.filter(function (item) {
+      return item.status === 'done' && typeof item.score === 'number';
+    });
+    items.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'risk-media__item';
+
+      var preview = document.createElement('span');
+      preview.className = 'risk-media__preview ' + (item.kind === 'image'
+        ? 'risk-media__preview--image' : 'risk-media__preview--audio');
+      if (item.kind === 'image') {
+        preview.style.backgroundImage = 'url(' + item.url + ')';
+        preview.style.backgroundSize = 'cover';
+        preview.style.backgroundPosition = 'center';
+      } else {
+        preview.textContent = '声';
+      }
+
+      var info = document.createElement('span');
+      info.className = 'risk-media__info';
+      var name = document.createElement('strong');
+      name.textContent = item.name;
+      var desc = document.createElement('small');
+      desc.textContent = item.summary || (item.ocrText ? item.ocrText.slice(0, 60) : '多模态检测完成');
+      info.appendChild(name);
+      info.appendChild(desc);
+
+      var score = document.createElement('span');
+      score.className = 'risk-media__score';
+      score.textContent = item.score + '%';
+
+      li.appendChild(preview);
+      li.appendChild(info);
+      li.appendChild(score);
+      list.appendChild(li);
+    });
+    if (!items.length) {
+      list.innerHTML = '<li class="empty-inline">上传文件后展示多模态研判结果</li>';
+    }
+    setText($('image-count'), items.length + ' 项');
+  }
+
+  /* ------------------------------------------------------------------------
+   * 二、文本交互
+   * ---------------------------------------------------------------------- */
+  function scheduleAutoAnalyze() {
+    updateChatStats();
+    var auto = $('auto-analyze');
+    if (!auto || !auto.checked) return;
+    window.clearTimeout(state.autoTimer);
+    state.autoTimer = window.setTimeout(function () {
+      var input = $('chat-text');
+      if (input && input.value.trim().length >= 2) {
+        analyze(false, false);
+      } else if (!state.files.length) {
+        renderEmpty();
+      }
+    }, 650);
+  }
+
+  function bindTextEvents() {
+    var input = $('chat-text');
+    if (input) {
+      input.addEventListener('input', scheduleAutoAnalyze);
+    }
+
+    var analyzeBtn = $('analyze-btn');
+    if (analyzeBtn) {
+      analyzeBtn.addEventListener('click', function () {
+        analyze(true, true);
+      });
+    }
+
+    var clearBtn = $('clear-btn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        if (input) input.value = '';
+        state.files.forEach(function (item) { URL.revokeObjectURL(item.url); });
+        state.files = [];
+        renderMedia();
+        updateChatStats();
+        renderEmpty();
+        setEngine('规则引擎 v1', '');
+      });
+    }
+
+    var demoBtn = $('demo-btn');
+    if (demoBtn) {
+      demoBtn.addEventListener('click', function () {
+        if (input) {
+          input.value = '[11:42] 陌生好友：亲，动动手指日赚 300，刷单返利，先垫付后返还。\n' +
+            '[11:43] 陌生好友：你的账户被冻结了，把验证码发给我就能解冻。\n' +
+            '[11:44] 陌生好友：下载会议 App 并开启屏幕共享，我远程指导你操作。';
+          updateChatStats();
+          analyze(false, true);
+        }
+      });
+    }
+
+    var maskBtn = $('mask-btn');
+    if (maskBtn) {
+      maskBtn.addEventListener('click', applyMask);
+    }
+
+    var auto = $('auto-analyze');
+    if (auto) {
+      auto.addEventListener('change', function () {
+        if (auto.checked) scheduleAutoAnalyze();
+      });
+    }
+    updateChatStats();
+  }
+
+  function applyMask() {
+    var input = $('chat-text');
+    var analysis = state.analysis;
+    if (!input || !analysis || !analysis.pii || !analysis.pii.length) {
+      toast('当前没有检测到需要脱敏的信息', 'error');
+      return;
+    }
+    var text = input.value;
+    var replacements = [];
+    analysis.pii.forEach(function (item) {
+      if (item.source === 'media') return;
+      (item.positions || []).forEach(function (pos) {
+        if (pos.start >= 0 && pos.end <= text.length && pos.end > pos.start) {
+          replacements.push({ start: pos.start, end: pos.end, label: item.label });
+        }
+      });
+    });
+    if (!replacements.length) {
+      toast('敏感信息可能来自图片或语音，请在原文中手动删除', 'error');
+      return;
+    }
+    replacements.sort(function (a, b) { return b.start - a.start; });
+    replacements.forEach(function (item) {
+      text = text.slice(0, item.start) + '[' + item.label + '已隐藏]' + text.slice(item.end);
+    });
+    input.value = text;
+    updateChatStats();
+    toast('已替换 ' + replacements.length + ' 处敏感信息', 'success');
+    analyze(false, true);
+  }
+
+  /* ------------------------------------------------------------------------
+   * 三、文件上传 / 录音
+   * ---------------------------------------------------------------------- */
+  function renderMedia() {
+    var grid = $('media-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    state.files.forEach(function (item) {
+      var figure = document.createElement('figure');
+      figure.className = 'media-card';
+
+      var preview = document.createElement('div');
+      preview.className = 'media-card__preview media-card__preview--' + item.kind;
+      if (item.kind === 'image') {
+        preview.style.backgroundImage = 'url(' + item.url + ')';
+        preview.style.backgroundSize = 'cover';
+        preview.style.backgroundPosition = 'center';
+      } else {
+        var icon = document.createElement('strong');
+        icon.textContent = '🎙';
+        var hint = document.createElement('small');
+        hint.textContent = (item.file.type.indexOf('audio') !== -1 ? '语音文件' : '音频');
+        preview.appendChild(icon);
+        preview.appendChild(hint);
+      }
+
+      var status = document.createElement('span');
+      status.className = 'media-card__status';
+      if (item.status === 'analyzing') {
+        status.classList.add('media-card__status--analyzing');
+        status.textContent = '分析中';
+      } else if (item.status === 'done') {
+        status.classList.add('media-card__status--done');
+        status.textContent = '已检测';
+      } else if (item.status === 'error') {
+        status.classList.add('media-card__status--error');
+        status.textContent = '失败';
+      } else {
+        status.textContent = '待检测';
+      }
+
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'media-card__remove';
+      remove.setAttribute('aria-label', '移除文件');
+      remove.textContent = '×';
+      remove.addEventListener('click', function () {
+        removeFile(item.id);
+      });
+
+      var caption = document.createElement('figcaption');
+      caption.className = 'media-card__caption';
+      var name = document.createElement('span');
+      name.className = 'media-card__name';
+      name.textContent = item.name;
+      name.title = item.name;
+      var tag = document.createElement('span');
+      var level = typeof item.score === 'number' ? (item.score >= 50 ? 'danger' : 'neutral') : 'neutral';
+      tag.className = 'tag tag--' + level;
+      tag.textContent = typeof item.score === 'number' ? item.score + '%' : '待检测';
+      caption.appendChild(name);
+      caption.appendChild(tag);
+
+      preview.appendChild(status);
+      preview.appendChild(remove);
+      figure.appendChild(preview);
+      figure.appendChild(caption);
+      grid.appendChild(figure);
+    });
+  }
+
+  function addFiles(fileList) {
+    var accepted = [];
+    Array.prototype.forEach.call(fileList || [], function (file) {
+      var isImage = file.type.indexOf('image/') === 0 || /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name);
+      var isAudio = file.type.indexOf('audio/') === 0 || /\.(mp3|wav|m4a|aac|ogg|webm|flac|amr)$/i.test(file.name);
+      if (!isImage && !isAudio) {
+        toast('仅支持图片或语音文件：' + file.name, 'error');
+        return;
+      }
+      var limit = isImage ? 10 * 1024 * 1024 : 25 * 1024 * 1024;
+      if (file.size > limit) {
+        toast((isImage ? '图片' : '语音') + '不能超过 ' + (isImage ? '10' : '25') + ' MB', 'error');
+        return;
+      }
+      var item = {
+        id: state.fileSeq++,
+        file: file,
+        url: URL.createObjectURL(file),
+        kind: isImage ? 'image' : 'audio',
+        name: file.name,
+        status: 'analyzing',
+        score: null,
+        summary: ''
+      };
+      state.files.push(item);
+      accepted.push(item);
+    });
+    if (!accepted.length) return;
+    renderMedia();
+    toast('已加入 ' + accepted.length + ' 个文件，开始多模态检测', 'success');
+    analyze(false, true);
+  }
+
+  function removeFile(id) {
+    var item = state.files.find(function (entry) { return entry.id === id; });
+    if (!item) return;
+    URL.revokeObjectURL(item.url);
+    state.files = state.files.filter(function (entry) { return entry.id !== id; });
+    renderMedia();
+    renderRiskMedia();
+    if (state.files.length) {
+      analyze(false, true);
+    } else {
+      analyze(false, false);
+    }
+  }
+
+  function bindUploader() {
+    var uploader = $('uploader');
+    var fileInput = $('file-input');
+    if (!uploader || !fileInput) return;
+
+    uploader.addEventListener('click', function () {
+      fileInput.click();
+    });
+    uploader.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+    fileInput.addEventListener('click', function (event) {
+      event.stopPropagation();
+    });
+    fileInput.addEventListener('change', function () {
+      addFiles(fileInput.files);
+      fileInput.value = '';
+    });
+    uploader.addEventListener('dragover', function (event) {
+      event.preventDefault();
+      uploader.classList.add('is-dragover');
+    });
+    uploader.addEventListener('dragleave', function () {
+      uploader.classList.remove('is-dragover');
+    });
+    uploader.addEventListener('drop', function (event) {
+      event.preventDefault();
+      uploader.classList.remove('is-dragover');
+      addFiles(event.dataTransfer.files);
+    });
+    document.addEventListener('paste', function (event) {
+      var items = event.clipboardData && event.clipboardData.items;
+      if (!items) return;
+      var files = [];
+      Array.prototype.forEach.call(items, function (item) {
+        if (item.type.indexOf('image/') === 0) {
+          var file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      });
+      if (files.length) {
+        event.preventDefault();
+        addFiles(files);
+      }
+    });
+  }
+
+  function bindRecorder() {
+    var button = $('record-btn');
+    var tip = $('record-tip');
+    var row = button ? button.parentNode : null;
+    if (!button) return;
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      button.disabled = true;
+      setText(tip, '当前浏览器不支持录音，请直接上传语音文件');
+      return;
+    }
+
+    button.addEventListener('click', function () {
+      if (state.recorder && state.recorder.state === 'recording') {
+        state.recorder.stop();
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        var recorder = new MediaRecorder(stream);
+        state.recorder = recorder;
+        state.recordChunks = [];
+        recorder.addEventListener('dataavailable', function (event) {
+          if (event.data && event.data.size > 0) state.recordChunks.push(event.data);
+        });
+        recorder.addEventListener('stop', function () {
+          stream.getTracks().forEach(function (track) { track.stop(); });
+          var blob = new Blob(state.recordChunks, { type: recorder.mimeType || 'audio/webm' });
+          var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+          var file = new File([blob], '录音-' + stamp + '.webm', { type: blob.type });
+          state.recorder = null;
+          if (row) row.classList.remove('is-recording');
+          button.textContent = '浏览器录音检测';
+          setText(tip, '录音完成，已加入待检测文件');
+          addFiles([file]);
+        });
+        recorder.start();
+        if (row) row.classList.add('is-recording');
+        button.textContent = '停止录音';
+        setText(tip, '正在录音，请描述你遇到的可疑情况…');
+      }).catch(function (error) {
+        toast('无法访问麦克风：' + error.message, 'error');
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------------
+   * 四、举报 / 导出 / 反馈
+   * ---------------------------------------------------------------------- */
+  function ensureSaved() {
+    if (state.analysisId && state.saved) {
+      return Promise.resolve(state.analysisId);
+    }
+    return analyze(true, true).then(function () {
+      return state.analysisId;
+    });
+  }
+
+  function openModal(id) {
+    var modal = $(id);
+    if (modal) modal.classList.remove('is-hidden');
+  }
+
+  function closeModal(id) {
+    var modal = $(id);
+    if (modal) modal.classList.add('is-hidden');
+  }
+
+  function bindModals() {
+    document.querySelectorAll('[data-close]').forEach(function (element) {
+      element.addEventListener('click', function () {
+        closeModal(element.getAttribute('data-close'));
+      });
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        document.querySelectorAll('.modal').forEach(function (modal) {
+          modal.classList.add('is-hidden');
+        });
+      }
+    });
+  }
+
+  function bindActions() {
+    var reportBtn = $('report-btn');
+    if (reportBtn) {
+      reportBtn.addEventListener('click', function () {
+        state.report = null;
+        hide($('report-result'));
+        openModal('report-modal');
+      });
+    }
+
+    var submit = $('submit-report-btn');
+    if (submit) {
+      submit.addEventListener('click', function () {
+        submit.disabled = true;
+        ensureSaved().then(function (id) {
+          if (!id) throw new Error('请先完成一次检测');
+          var channel = $('report-channel') ? $('report-channel').value : '12321';
+          var note = $('report-note') ? $('report-note').value.trim() : '';
+          return API.postJson('/api/reports', {
+            analysis_id: id,
+            channel: channel,
+            note: note
+          });
+        }).then(function (data) {
+          state.report = data.report;
+          setText($('report-result-meta'), data.report.report_no + ' · ' + data.report.channel);
+          setText($('report-result-content'), data.report.content);
+          var download = $('download-report-btn');
+          if (download) download.href = API.downloadUrl(data.download_url);
+          show($('report-result'));
+          toast('举报材料已生成，可复制或下载', 'success');
+        }).catch(function (error) {
+          toast(error.message, 'error');
+        }).finally(function () {
+          submit.disabled = false;
+        });
+      });
+    }
+
+    var copyReport = $('copy-report-btn');
+    if (copyReport) {
+      copyReport.addEventListener('click', function () {
+        if (!state.report) return;
+        copyText(state.report.content, '举报材料已复制');
+      });
+    }
+
+    var exportBtn = $('export-btn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function () {
+        ensureSaved().then(function (id) {
+          if (!id) throw new Error('请先完成一次检测');
+          window.open(API.downloadUrl('/api/history/' + id + '/export'), '_blank');
+        }).catch(function (error) {
+          toast(error.message, 'error');
+        });
+      });
+    }
+
+    var copyBtn = $('copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function () {
+        var analysis = state.analysis;
+        if (!analysis) return;
+        var text = '反诈卫士检测结论\n风险：' + analysis.risk_label + ' ' + analysis.risk_score + '%\n' +
+          '类型：' + analysis.scam_type + '\n结论：' + analysis.summary + '\n建议：\n' +
+          (analysis.suggestions || []).map(function (item, index) {
+            return (index + 1) + '. ' + item;
+          }).join('\n');
+        copyText(text, '结论已复制');
+      });
+    }
+
+    var feedbackBtn = $('feedback-btn');
+    if (feedbackBtn) {
+      feedbackBtn.addEventListener('click', function () {
+        ensureSaved().then(function (id) {
+          if (!id) throw new Error('请先完成一次检测');
+          return API.postJson('/api/history/' + id + '/feedback', {
+            is_false_positive: true,
+            note: '用户在前端标记为误报'
+          });
+        }).then(function () {
+          toast('已标记为误报，感谢反馈', 'success');
+        }).catch(function (error) {
+          toast(error.message, 'error');
+        });
+      });
+    }
+  }
+
+  function copyText(text, successMessage) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () {
+        toast(successMessage, 'success');
+      }).catch(function () {
+        fallbackCopy(text, successMessage);
+      });
+    } else {
+      fallbackCopy(text, successMessage);
+    }
+  }
+
+  function fallbackCopy(text, successMessage) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand('copy');
+      toast(successMessage, 'success');
+    } catch (error) {
+      toast('复制失败，请手动选择文本', 'error');
+    }
+    document.body.removeChild(area);
+  }
+
+  /* ------------------------------------------------------------------------
+   * 五、知识宣传
+   * ---------------------------------------------------------------------- */
+  var FALLBACK_KNOWLEDGE = [
+    {
+      category: '刷单返利',
+      title: '所有“先垫付后返利”都是诈骗',
+      content: '刷单返利诈骗通常以“动动手指日赚几百”开场，先用小额返利建立信任，再以“连单任务”“操作失误”“账户冻结”为由要求持续垫付。正规兼职不会要求你先垫钱。',
+      tags: '刷单,返利,垫付,兼职'
+    },
+    {
+      category: '冒充客服',
+      title: '退款理赔不会让你开屏幕共享',
+      content: '冒充电商或物流客服，以“订单异常、商品质量问题、理赔退款”为由，诱导你下载会议软件并开启屏幕共享，进而窥屏获取验证码、银行卡密码。真正的客服不会要求屏幕共享。',
+      tags: '客服,退款,屏幕共享,验证码'
+    },
+    {
+      category: '信息保护',
+      title: '验证码是你的最后一道门',
+      content: '短信验证码等于账户钥匙。任何人以任何理由索要验证码，都应立即拒绝。不要向陌生人发送身份证、银行卡正反面照片，不要开启屏幕共享。',
+      tags: '验证码,身份证,银行卡,密码'
+    },
+    {
+      category: '冒充公检法',
+      title: '公检法不会电话办案，更没有“安全账户”',
+      content: '骗子冒充公安、检察院、法院，以“涉嫌洗钱、护照异常、涉案账户”制造恐惧，要求你保密、单独沟通，并把钱转入所谓“安全账户”。公检法绝不会通过电话、社交软件办案。',
+      tags: '公检法,安全账户,洗钱,恐吓'
+    },
+    {
+      category: '虚假投资',
+      title: '稳赚不赔的投资，只存在于骗局里',
+      content: '虚假投资理财通过“导师带单、内部渠道、稳赚不赔”吸引你进入伪造平台，先让你小赚提现，再诱导加大投入。平台数据可随意修改，一旦大额入金便无法提现。',
+      tags: '投资,理财,导师,提现'
+    },
+    {
+      category: '网络贷款',
+      title: '放款前先收费的，一定是诈骗',
+      content: '正规贷款不会在放款前收取保证金、解冻费、工本费、认证费。凡是要求先转账“刷流水”“包装征信”的，都是诈骗。征信无法通过转账修复。',
+      tags: '贷款,征信,保证金,校园贷'
+    }
+  ];
+
+  var knowledgeItems = FALLBACK_KNOWLEDGE;
+
+  function renderKnowledge(items) {
+    var grid = $('knowledge-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    items.forEach(function (card, index) {
+      var article = document.createElement('article');
+      article.className = 'know-card';
+      article.tabIndex = 0;
+      article.setAttribute('role', 'button');
+
+      var number = document.createElement('span');
+      number.className = 'know-card__index';
+      number.textContent = String(index + 1).padStart(2, '0');
+
+      var title = document.createElement('h3');
+      title.className = 'know-card__title';
+      title.textContent = card.title;
+
+      var group = document.createElement('p');
+      group.className = 'know-card__group';
+      group.textContent = card.category;
+
+      var text = document.createElement('p');
+      text.className = 'know-card__text';
+      text.textContent = card.content;
+
+      var tip = document.createElement('p');
+      tip.className = 'know-card__tip';
+      var strong = document.createElement('strong');
+      strong.textContent = '关键词：';
+      tip.appendChild(strong);
+      tip.appendChild(document.createTextNode(card.tags || ''));
+
+      article.appendChild(number);
+      article.appendChild(title);
+      article.appendChild(group);
+      article.appendChild(text);
+      article.appendChild(tip);
+
+      function openDetail() {
+        setText($('knowledge-modal-category'), card.category);
+        setText($('knowledge-modal-title'), card.title);
+        setText($('knowledge-modal-content'), card.content + (card.tags ? '\n\n关键词：' + card.tags : ''));
+        openModal('knowledge-modal');
+      }
+      article.addEventListener('click', openDetail);
+      article.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openDetail();
+        }
+      });
+      grid.appendChild(article);
+    });
+  }
+
+  function loadKnowledge() {
+    API.get('/api/knowledge').then(function (data) {
+      if (data.items && data.items.length) {
+        knowledgeItems = data.items;
+        renderKnowledge(knowledgeItems);
+      } else {
+        renderKnowledge(FALLBACK_KNOWLEDGE);
+      }
+    }).catch(function () {
+      renderKnowledge(FALLBACK_KNOWLEDGE);
+    });
+  }
+
+  /* ------------------------------------------------------------------------
+   * 六、每日一反诈
+   * ---------------------------------------------------------------------- */
+  var DAILY_CASES = [
+    {
+      region: '本地预警',
+      type: '机票退改签理赔诈骗',
+      date: '近期通报',
+      title: '冒充航司客服理赔，屏幕共享后资金被分三次转走',
+      story: '翟某接到自称航空公司客服的电话，称所购机票因飞机故障延误，可改签并承诺给其和家人每人理赔 300 元。对方引导下载聊天/会议软件，以“理赔过程需要录制”为由要求开启屏幕共享，随后让其逐个打开手机银行并输入验证码，卡内资金被分 3 次转走。',
+      steps: [
+        '非法获取购票等个人信息，准确说出姓名、证件、航班信息以骗取信任。',
+        '以改签、退票、保险理赔为诱饵，引导点击短信链接或下载涉诈会议软件。',
+        '要求开启屏幕共享/远程控制，实时看到手机操作界面，套取账户密码与验证码后转走资金。'
+      ],
+      tips: '退票理赔只通过航空公司官方 APP 或官方客服电话核实；凡是要求屏幕共享、远程指导操作的“理赔”都是诈骗；短信验证码绝不告诉任何人。'
+    },
+    {
+      region: '全国通报 · 本地转发提醒',
+      type: '冒充客服 + 涉诈 APP',
+      date: '2025-02 预警',
+      title: '“银联会议”APP 是诈骗软件，冒充客服取消会员扣费',
+      story: '骗子冒充某短视频平台客服，称事主开通了“直播会员”，若不取消将每月自动扣费。随后添加事主微信、QQ，诱导下载名为“银联会议”的 APP，要求开启屏幕共享或远程控制，配合登录手机银行、输入密码和验证码，将卡内资金转走。中国银联已声明：该 APP 非中国银联产品。',
+      steps: [
+        '虚构“会员扣费、影响征信”等理由制造恐慌，冒充客服取得信任。',
+        '诱导下载会议类涉诈 APP，躲避正规应用商店监管。',
+        '通过屏幕共享暴露操作界面，套取密码、验证码后转账或远程操控手机。'
+      ],
+      tips: '自称客服要求取消“会员、百万保障、保险”业务的，基本都是诈骗；不下载来源不明的 APP；不共享屏幕；接到 96110 预警电话务必接听。'
+    },
+    {
+      region: '学生群体高发',
+      type: '刷单返利诈骗',
+      date: '暑期高发预警',
+      title: '兼职群“日赚 300”，小额返利后连单垫资无法提现',
+      story: '在校学生在 QQ 群看到“足不出户、日赚数百”的兼职信息，扫码联系“客服”后接了几单小额任务并收到返利。随后被要求充值做大单、连续做单，对方以“任务未完成、系统卡单”为由不断要求追加垫付，最终本金无法提现，被对方拉黑。',
+      steps: [
+        '通过招聘群、短视频发布虚假兼职广告，以小额返利骗取信任。',
+        '诱导下载涉诈 APP 或进入专用群聊接单。',
+        '以连单、卡单、保证金、解冻费等名义要求持续垫资。',
+        '大额投入后以各种理由拒绝提现，随即拉黑失联。'
+      ],
+      tips: '刷单本身属于违规行为，所有“刷单返利”都是诈骗；学生兼职先核实单位资质，不垫付、不充值、不向陌生账户转账。'
+    }
+  ];
+
+  var dailyIndex = 0;
+
+  function renderDaily() {
+    var item = DAILY_CASES[dailyIndex];
+    if (!item) return;
+    setText($('daily-region'), item.region);
+    setText($('daily-type'), item.type);
+    setText($('daily-date'), item.date);
+    setText($('daily-title-text'), item.title);
+    setText($('daily-story'), item.story);
+    setText($('daily-tips-text'), item.tips);
+    var steps = $('daily-steps');
+    if (steps) {
+      steps.innerHTML = '';
+      item.steps.forEach(function (step) {
+        var li = document.createElement('li');
+        li.textContent = step;
+        steps.appendChild(li);
+      });
+    }
+    setText($('daily-counter'), '第 ' + (dailyIndex + 1) + ' / ' + DAILY_CASES.length + ' 例');
+  }
+
+  function bindDaily() {
+    var next = $('daily-next');
+    if (next) {
+      next.addEventListener('click', function () {
+        dailyIndex = (dailyIndex + 1) % DAILY_CASES.length;
+        renderDaily();
+      });
+    }
+    var now = new Date();
+    var start = new Date(now.getFullYear(), 0, 1);
+    var day = Math.floor((now - start) / 86400000);
+    dailyIndex = day % DAILY_CASES.length;
+    renderDaily();
+  }
+
+  /* ------------------------------------------------------------------------
+   * 七、反诈问答
+   * ---------------------------------------------------------------------- */
+  var QUESTIONS = [
+    {
+      q: '陌生来电自称客服，说你开通了“直播会员 / 百万保障”，不取消就会自动扣费，并让你下载会议软件、开启屏幕共享。正确做法是？',
+      options: ['按对方指引下载软件并共享屏幕，尽快取消业务', '挂断电话，通过官方客服渠道核实，绝不开启屏幕共享', '添加对方微信，按提示一步步操作'],
+      answer: 1,
+      explain: '凡是自称客服要求取消“会员 / 保障”、并引导下载会议软件或共享屏幕的，都是典型诈骗；业务核实只走官方渠道。'
+    },
+    {
+      q: '兼职群里发布“刷单返利、日赚 300”，先返了几元小额佣金，随后让你垫付做大单。你应该？',
+      options: ['这是正规兼职，佣金高可以加大投入', '立即退出并拉黑，刷单返利本身就是诈骗', '先垫付小额试试，能提现再继续'],
+      answer: 1,
+      explain: '小额返利是诱饵，目的是骗取信任后诱导大额垫资；刷单违规，后续会以卡单、连单为由拒绝提现。'
+    },
+    {
+      q: '网恋对象带你在某 App 上“投资理财、刷流水”，说平台稳赚不赔、有内部导师。这属于？',
+      options: ['可靠的理财渠道，可以跟着投钱', '“杀猪盘”或虚假投资理财诈骗，应停止联系并举报', '先投少量，盈利后再追加'],
+      answer: 1,
+      explain: '陌生交友引流到虚假投资平台是杀猪盘典型套路，前期小额盈利是为了诱导大额投入，最终无法提现。'
+    },
+    {
+      q: '接到“公检法”电话，称你涉嫌洗钱，要求把钱转到“安全账户”配合审查。正确的是？',
+      options: ['配合转账，自证清白', '公检法不会电话办案，也不存在“安全账户”，挂断后拨打 110 核实', '按对方要求到宾馆开房接电话、下载软件'],
+      answer: 1,
+      explain: '公检法机关不会通过电话、QQ 微信办案，更没有所谓“安全账户”；要求转账验资的一律是诈骗。'
+    },
+    {
+      q: '针对老年人的骗局中，对方自称是子女朋友或亲属，急用钱让你先转账。稳妥做法是？',
+      options: ['电话里听着急就先转过去', '通过子女本人电话或当面核实身份后再决定，不轻信', '按对方给的账号汇款'],
+      answer: 1,
+      explain: '冒充亲属借钱常利用孝心和紧迫感；转账前务必通过已知联系方式或当面核实，必要时联系社区民警。'
+    }
+  ];
+
+  var answers = new Array(QUESTIONS.length).fill(null);
+
+  function answeredCount() {
+    return answers.filter(function (item) { return item !== null; }).length;
+  }
+
+  function renderQuiz() {
+    var list = $('quiz-list');
+    var result = $('quiz-result');
+    var progress = $('quiz-progress');
+    if (!list) return;
+    list.innerHTML = '';
+    if (result) result.hidden = true;
+
+    QUESTIONS.forEach(function (item, qi) {
+      var block = document.createElement('div');
+      block.className = 'quiz-question';
+
+      var title = document.createElement('p');
+      title.className = 'quiz-question__title';
+      title.textContent = (qi + 1) + '. ' + item.q;
+      block.appendChild(title);
+
+      var options = document.createElement('div');
+      options.className = 'quiz-options';
+      item.options.forEach(function (text, oi) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'quiz-option';
+        var mark = document.createElement('span');
+        mark.className = 'quiz-option__mark';
+        mark.textContent = 'ABCD'[oi];
+        var content = document.createElement('span');
+        content.textContent = text;
+        btn.appendChild(mark);
+        btn.appendChild(content);
+
+        if (answers[qi] !== null) {
+          btn.disabled = true;
+          if (oi === item.answer) btn.classList.add('quiz-option--correct');
+          else if (oi === answers[qi]) btn.classList.add('quiz-option--wrong');
+        } else {
+          btn.addEventListener('click', function () {
+            if (answers[qi] !== null) return;
+            answers[qi] = oi;
+            renderQuiz();
+            checkQuizDone();
+          });
+        }
+        options.appendChild(btn);
+      });
+      block.appendChild(options);
+
+      var feedback = document.createElement('p');
+      feedback.className = 'quiz-feedback';
+      if (answers[qi] !== null) {
+        var ok = answers[qi] === item.answer;
+        feedback.classList.add('quiz-feedback--show', ok ? 'quiz-feedback--ok' : 'quiz-feedback--no');
+        feedback.textContent = (ok ? '回答正确。' : '回答不正确。') + item.explain;
+      }
+      block.appendChild(feedback);
+      list.appendChild(block);
+    });
+    setText(progress, '已答 ' + answeredCount() + ' / ' + QUESTIONS.length + ' 题');
+  }
+
+  function checkQuizDone() {
+    if (answeredCount() !== QUESTIONS.length) return;
+    var correct = answers.filter(function (answer, index) {
+      return answer === QUESTIONS[index].answer;
+    }).length;
+    var percent = Math.round((correct / QUESTIONS.length) * 100);
+    setText($('quiz-score'), correct + ' / ' + QUESTIONS.length + ' 题 · ' + percent + ' 分');
+    if (correct === QUESTIONS.length) {
+      setText($('quiz-level'), '反诈达人');
+      setText($('quiz-desc'), '全部答对，防骗意识很强！继续保持，也把这些要点分享给家人和同学。');
+    } else if (correct >= 3) {
+      setText($('quiz-level'), '基本掌握');
+      setText($('quiz-desc'), '大部分题目答对了，可以再看一遍知识宣传里的骗局类型，巩固薄弱环节。');
+    } else {
+      setText($('quiz-level'), '还需加强');
+      setText($('quiz-desc'), '还有不少套路需要了解，建议先阅读“知识宣传”板块，再回来重新作答。');
+    }
+    var result = $('quiz-result');
+    if (result) result.hidden = false;
+  }
+
+  function bindQuiz() {
+    var restart = $('quiz-restart');
+    if (restart) {
+      restart.addEventListener('click', function () {
+        answers = new Array(QUESTIONS.length).fill(null);
+        renderQuiz();
+      });
+    }
+    renderQuiz();
+  }
+
+  /* ------------------------------------------------------------------------
+   * 八、视图切换与初始化
+   * ---------------------------------------------------------------------- */
+  function switchView(name) {
+    document.querySelectorAll('.view').forEach(function (view) {
+      view.classList.toggle('is-active', view.id === 'view-' + name);
+    });
+    document.querySelectorAll('[data-view-link]').forEach(function (link) {
+      var active = link.getAttribute('data-view-link') === name;
+      link.classList.toggle('site-nav__link--active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+  }
+
+  function bindViews() {
+    document.querySelectorAll('[data-view-link]').forEach(function (link) {
+      link.addEventListener('click', function (event) {
+        var name = link.getAttribute('data-view-link');
+        if (!document.getElementById('view-' + name)) return;
+        event.preventDefault();
+        switchView(name);
+        history.replaceState(null, '', '#' + name);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('view-' + hash)) {
+      switchView(hash);
+    }
+  }
+
+  function loadConfig() {
+    API.get('/api/config').then(function (data) {
+      if (data.ai && data.ai.enabled) {
+        setEngine('Qwen 多模态', data.ai.note);
+      } else {
+        setEngine('规则引擎 v1', data.ai ? data.ai.note : '本地规则引擎');
+      }
+      setGuard('防护已就绪', true);
+    }).catch(function () {
+      setGuard('本地演示模式', false);
+    });
+  }
+
+  function init() {
+    bindViews();
+    bindTextEvents();
+    bindUploader();
+    bindRecorder();
+    bindActions();
+    bindModals();
+    bindDaily();
+    bindQuiz();
+    renderKnowledge(FALLBACK_KNOWLEDGE);
+    loadKnowledge();
+    loadConfig();
+    renderMedia();
+    setButtonEnabled('report-btn', false);
+    setButtonEnabled('export-btn', false);
+    setButtonEnabled('copy-btn', false);
+    setButtonEnabled('feedback-btn', false);
+    analyze(false, false);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

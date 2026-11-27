@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>历史检测记录 · 反诈卫士</title>
+  <link rel="stylesheet" href="../css/style.css?v=1.0.0" />
+</head>
+
+<body>
+  <h1 class="visually-hidden">反诈卫士 · 历史检测记录</h1>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="index.html" aria-label="反诈卫士首页">
+        <span class="brand__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 4.5 6v6c0 4.2 3.1 7.6 7.5 9 4.4-1.4 7.5-4.8 7.5-9V6L12 3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </span>
+        <span class="brand__text">
+          <span class="brand__name">反诈卫士</span>
+          <span class="brand__slogan">检测记录与证据管理</span>
+        </span>
+      </a>
+
+      <nav class="site-nav" aria-label="主导航">
+        <a class="site-nav__link" href="index.html">AI 管家</a>
+        <a class="site-nav__link site-nav__link--active" href="history.html" aria-current="page">历史记录</a>
+        <a class="site-nav__link" href="logs.html">运行日志</a>
+      </nav>
+
+      <p class="guard-status">
+        <span class="guard-status__dot" aria-hidden="true"></span>
+        数据来自 SQL Server
+      </p>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <div class="page-head">
+      <div class="page-head__heading">
+        <p class="panel__eyebrow">检测记录</p>
+        <h2 class="panel__title">历史风险检测与证据留存</h2>
+      </div>
+      <p class="chip chip--ai">
+        <span class="chip__dot" aria-hidden="true"></span>
+        检测 · 举报 · 复盘
+      </p>
+    </div>
+
+    <div class="stats-grid">
+      <article class="stat-card">
+        <strong class="stat-card__value" id="stat-total">0</strong>
+        <span class="stat-card__label">累计检测</span>
+      </article>
+      <article class="stat-card">
+        <strong class="stat-card__value stat-card__value--danger" id="stat-high">0</strong>
+        <span class="stat-card__label">高风险以上</span>
+      </article>
+      <article class="stat-card">
+        <strong class="stat-card__value stat-card__value--amber" id="stat-pii">0</strong>
+        <span class="stat-card__label">含个人信息暴露</span>
+      </article>
+      <article class="stat-card">
+        <strong class="stat-card__value stat-card__value--green" id="stat-reports">0</strong>
+        <span class="stat-card__label">已生成举报材料</span>
+      </article>
+    </div>
+
+    <div class="page-toolbar">
+      <input class="form-input" id="keyword" type="search" placeholder="搜索文本、摘要或诈骗类型…" />
+      <select class="form-select" id="level-filter">
+        <option value="">全部风险等级</option>
+        <option value="critical">极高风险</option>
+        <option value="high">高风险</option>
+        <option value="medium">中风险</option>
+        <option value="low">低风险</option>
+      </select>
+      <select class="form-select" id="source-filter">
+        <option value="">全部来源</option>
+        <option value="text">纯文本</option>
+        <option value="image">图片</option>
+        <option value="audio">语音</option>
+        <option value="mixed">多模态</option>
+      </select>
+      <button class="btn btn--primary btn--sm" id="search-btn" type="button">查询</button>
+      <button class="btn btn--ghost btn--sm" id="reset-btn" type="button">重置</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>风险</th>
+            <th>疑似类型</th>
+            <th>内容摘要</th>
+            <th>来源</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <tr><td colspan="6" class="empty-inline">正在读取检测记录…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pagination">
+      <span id="page-meta">第 1 / 1 页</span>
+      <button class="btn btn--ghost btn--sm" id="prev-page" type="button">上一页</button>
+      <button class="btn btn--ghost btn--sm" id="next-page" type="button">下一页</button>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>赛题 11 · 反诈卫士 · 网络安全方向</p>
+    <p>历史数据保存在 SQL Server · 支持导出证据与举报材料</p>
+    <p class="site-footer__links">
+      <a href="index.html">返回检测台</a>
+      <span aria-hidden="true">·</span>
+      <a href="logs.html">运行日志</a>
+    </p>
+  </footer>
+
+  <div class="modal is-hidden" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="modal__backdrop" data-close="detail-modal"></div>
+    <div class="modal__panel">
+      <header class="modal__header">
+        <div>
+          <p class="panel__eyebrow">检测详情</p>
+          <h2 class="modal__title" id="detail-title">风险研判</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="detail-modal" aria-label="关闭">×</button>
+      </header>
+      <div class="modal__body" id="detail-body"></div>
+      <footer class="modal__footer">
+        <button class="btn btn--ghost" type="button" data-close="detail-modal">关闭</button>
+        <a class="btn btn--sm btn--ghost" id="detail-report" href="#" target="_blank" rel="noopener">处置报告</a>
+        <a class="btn btn--sm" id="detail-export" href="#" target="_blank" rel="noopener">导出证据</a>
+        <button class="btn btn--sm" id="detail-feedback" type="button">标记误报</button>
+        <button class="btn btn--sm btn--danger" id="detail-delete" type="button">删除记录</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../js/api.js?v=1.0.0"></script>
+  <script src="../js/history.js?v=1.0.0"></script>
+</body>
+</html>

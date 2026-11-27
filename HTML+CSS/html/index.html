@@ -3,17 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta
-    name="description"
-    content="反诈卫士：面向青年的 AI 诈骗识别与个人信息保护助手，实时分析聊天文本与图片中的诈骗风险。"
-  />
+  <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
   <title>反诈卫士 · AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/style.css?v=1.0.0" />
 </head>
 
 <body>
-  <!-- 页面主标题：视觉上隐藏，保证文档大纲完整 -->
-  <h1 class="visually-hidden">反诈卫士 · 诈骗风险实时监测工作台</h1>
+  <h1 class="visually-hidden">反诈卫士 · 诈骗风险监测与防骗学习平台</h1>
 
   <!-- ==================== 顶部导航栏 ==================== -->
   <header class="site-header">
@@ -33,223 +29,475 @@
       </a>
 
       <nav class="site-nav" aria-label="主导航">
-        <a class="site-nav__link site-nav__link--active" href="index.html" aria-current="page">个人用户</a>
-        <a class="site-nav__link" href="#">历史记录</a>
-        <a class="site-nav__link" href="#">日志</a>
+        <a class="site-nav__link site-nav__link--active" href="#monitor" data-view-link="monitor" aria-current="page">AI 管家</a>
+        <a class="site-nav__link" href="#daily" data-view-link="daily">每日一反诈</a>
+        <a class="site-nav__link" href="#quiz" data-view-link="quiz">反诈问答</a>
+        <a class="site-nav__link" href="#knowledge" data-view-link="knowledge">知识宣传</a>
       </nav>
 
-      <p class="guard-status">
+      <p class="guard-status" id="guard-status">
         <span class="guard-status__dot" aria-hidden="true"></span>
-        实时防护中
+        <span id="guard-status-text">实时防护中</span>
       </p>
     </div>
   </header>
 
-  <!-- ==================== 工作区：左侧输入 / 右侧分析 ==================== -->
-  <main class="workspace">
-    <!-- 左侧：聊天文本与图片输入区 -->
-    <section class="panel panel--input" aria-labelledby="chat-title">
-      <header class="panel__header">
-        <div class="panel__heading">
-          <p class="panel__eyebrow">对话监测</p>
-          <h2 class="panel__title" id="chat-title">聊天文本</h2>
-        </div>
-        <p class="chip chip--live">
-          <span class="chip__dot" aria-hidden="true"></span>
-          实时接收中
+  <!-- ==================== 本地反诈速览条 ==================== -->
+  <section class="local-brief" aria-label="本地反诈速览">
+    <div class="local-brief__inner">
+      <div class="local-brief__main">
+        <p class="local-brief__title">
+          <span class="local-brief__badge">本地速览</span>
+          近期电诈风险提示
         </p>
-      </header>
+        <p class="local-brief__desc">
+          近期高发：<strong>兼职刷单、机票退改签理赔、冒充客服退款、虚假投资理财、屏幕共享类涉诈 APP</strong>；
+          重点防范人群：在校学生、中老年及独居居民。
+        </p>
+      </div>
+      <ul class="local-brief__channels" aria-label="预警与求助渠道">
+        <li>国家反诈中心 APP · 开启来电预警</li>
+        <li>96110 反诈预警专线（务必接听）</li>
+        <li>报警求助 110</li>
+      </ul>
+    </div>
+  </section>
 
-      <div class="chat-field">
-        <div class="chat-field__meta">
-          <label class="chat-field__label" for="chat-text">聊天文本输入 / 接收区</label>
-          <span class="chat-field__hint">逐句分析 · 本地处理</span>
-        </div>
+  <main class="page-main">
+    <!-- ==================== 视图一：AI 管家 · 实时监测台 ==================== -->
+    <section class="view is-active" id="view-monitor" aria-labelledby="chat-title">
+      <div class="workspace">
+        <!-- 左侧：聊天文本与图片/语音输入区 -->
+        <section class="panel panel--input" aria-labelledby="chat-title">
+          <header class="panel__header">
+            <div class="panel__heading">
+              <p class="panel__eyebrow">对话监测</p>
+              <h2 class="panel__title" id="chat-title">聊天文本</h2>
+            </div>
+            <p class="chip chip--live">
+              <span class="chip__dot" aria-hidden="true"></span>
+              实时接收中
+            </p>
+          </header>
 
-        <textarea
-          class="chat-field__input"
-          id="chat-text"
-          spellcheck="false"
-          aria-describedby="chat-tips"
-        >[11:42] 陌生好友：亲，动动手指日赚 300，刷单返利，先垫付后返还。
+          <div class="chat-field">
+            <div class="chat-field__meta">
+              <label class="chat-field__label" for="chat-text">聊天文本输入 / 接收区</label>
+              <label class="switch" for="auto-analyze">
+                <input type="checkbox" id="auto-analyze" checked />
+                <span class="switch__track" aria-hidden="true"></span>
+                <span class="switch__text">实时分析</span>
+              </label>
+            </div>
+
+            <textarea class="chat-field__input" id="chat-text" spellcheck="false" aria-describedby="chat-tips">[11:42] 陌生好友：亲，动动手指日赚 300，刷单返利，先垫付后返还。
 [11:43] 陌生好友：你的账户被冻结了，把验证码发给我就能解冻。
 [11:44] 陌生好友：下载会议 App 并开启屏幕共享，我远程指导你操作。</textarea>
 
-        <div class="chat-field__footer" id="chat-tips">
-          <span>3 条消息 · 约 120 字</span>
-          <span>内容仅用于本次风险分析</span>
-        </div>
-      </div>
-
-      <div class="media-field">
-        <div class="media-field__head">
-          <h3 class="media-field__title">图片区域</h3>
-          <p class="media-field__hint">聊天截图 · 二维码 · 转账凭证</p>
-        </div>
-
-        <!-- 图片上传占位区 -->
-        <div class="uploader">
-          <span class="uploader__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="3" />
-              <circle cx="9" cy="10" r="1.6" />
-              <path d="m5 18 5.5-5.5a2 2 0 0 1 2.8 0L19 18" />
-              <path d="M15 4v5h5" />
-            </svg>
-          </span>
-          <span class="uploader__text">
-            <strong>拖拽或粘贴聊天图片</strong>
-            <small>支持 PNG / JPG / 屏幕截图，单张不超过 10 MB</small>
-          </span>
-          <span class="uploader__action" aria-hidden="true">选择图片</span>
-        </div>
-
-        <!-- 已接收图片列表（静态示例） -->
-        <div class="media-grid">
-          <figure class="media-card">
-            <div class="media-card__preview media-card__preview--transfer" role="img" aria-label="转账截图示例">
-              <span class="mock-pill">转账 · 已受理</span>
-              <strong class="mock-amount">¥5,000</strong>
+            <div class="chat-field__footer" id="chat-tips">
+              <span id="chat-stats">3 条消息 · 约 120 字</span>
+              <span>内容仅用于本次风险分析 · 本地规则引擎</span>
             </div>
-            <figcaption class="media-card__caption">
-              <span class="media-card__name">转账截图</span>
-              <span class="tag tag--danger">高风险</span>
-            </figcaption>
-          </figure>
+          </div>
 
-          <figure class="media-card">
-            <div class="media-card__preview media-card__preview--qr" role="img" aria-label="收款二维码示例">
-              <span class="mock-qr" aria-hidden="true"></span>
-              <span class="mock-qr__label">扫码领福利</span>
+          <div class="input-actions">
+            <button class="btn btn--primary" id="analyze-btn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m12 3 2.2 5.4L20 10.5l-5.8 2.1L12 18l-2.2-5.4L4 10.5l5.8-2.1L12 3Z" />
+              </svg>
+              立即检测
+            </button>
+            <button class="btn btn--ghost" id="mask-btn" type="button" title="替换文本中的手机号、身份证、银行卡等敏感信息">
+              一键脱敏
+            </button>
+            <button class="btn btn--ghost" id="demo-btn" type="button">载入示例</button>
+            <button class="btn btn--ghost" id="clear-btn" type="button">清空</button>
+          </div>
+
+          <div class="media-field">
+            <div class="media-field__head">
+              <h3 class="media-field__title">图片 / 语音区域</h3>
+              <p class="media-field__hint">聊天截图 · 二维码 · 转账凭证 · 语音录音</p>
             </div>
-            <figcaption class="media-card__caption">
-              <span class="media-card__name">收款二维码</span>
-              <span class="tag tag--danger">高风险</span>
-            </figcaption>
-          </figure>
 
-          <figure class="media-card">
-            <div class="media-card__preview media-card__preview--profile" role="img" aria-label="客服名片示例">
-              <span class="mock-avatar" aria-hidden="true">服</span>
-              <span class="mock-lines" aria-hidden="true">
-                <i></i><i></i><i></i>
+            <div class="uploader" id="uploader" tabindex="0" role="button"
+              aria-label="上传图片或语音，支持拖拽、粘贴和点击选择">
+              <input type="file" id="file-input" class="visually-hidden" multiple
+                accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac,.amr" />
+              <span class="uploader__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="3" />
+                  <circle cx="9" cy="10" r="1.6" />
+                  <path d="m5 18 5.5-5.5a2 2 0 0 1 2.8 0L19 18" />
+                  <path d="M15 4v5h5" />
+                </svg>
               </span>
+              <span class="uploader__text">
+                <strong>拖拽、粘贴聊天截图或录音</strong>
+                <small>图片 ≤ 10 MB · 语音 ≤ 25 MB · Qwen 多模态优先</small>
+              </span>
+              <span class="uploader__action" aria-hidden="true">选择文件</span>
             </div>
-            <figcaption class="media-card__caption">
-              <span class="media-card__name">客服名片</span>
-              <span class="tag tag--neutral">待分析</span>
-            </figcaption>
-          </figure>
-        </div>
+
+            <div class="record-row">
+              <button class="btn btn--ghost btn--sm" id="record-btn" type="button">
+                <span class="record-dot" aria-hidden="true"></span>
+                浏览器录音检测
+              </button>
+              <span class="record-tip" id="record-tip">允许麦克风后开始录音，结束后自动加入待检测文件</span>
+            </div>
+
+            <div class="media-grid" id="media-grid"></div>
+            <p class="field-note" id="media-note">
+              图片优先使用 Qwen-VL，未配置时使用 Windows OCR + 本地规则；语音优先使用 Qwen-ASR 转写。
+            </p>
+          </div>
+        </section>
+
+        <!-- 右侧：实时风险分析区 -->
+        <aside class="panel panel--analysis" aria-labelledby="analysis-title">
+          <header class="panel__header">
+            <div class="panel__heading">
+              <p class="panel__eyebrow">AI 研判</p>
+              <h2 class="panel__title" id="analysis-title">风险分析</h2>
+            </div>
+            <p class="chip chip--ai" id="engine-chip">
+              <span class="chip__dot" aria-hidden="true"></span>
+              <span id="engine-chip-text">规则引擎 v1</span>
+            </p>
+          </header>
+
+          <div class="risk-overview" id="risk-overview">
+            <div class="risk-ring risk-ring--low" id="risk-ring" role="img" aria-label="综合诈骗风险 0%">
+              <div class="risk-ring__inner">
+                <strong class="risk-ring__value" id="risk-score">0<span>%</span></strong>
+                <span class="risk-ring__label">诈骗风险</span>
+              </div>
+            </div>
+
+            <div class="risk-summary">
+              <p class="risk-summary__level" id="risk-level">
+                <span class="risk-summary__dot" aria-hidden="true"></span>
+                <span id="risk-level-text">等待检测</span>
+              </p>
+              <h3 class="risk-summary__title" id="risk-title">粘贴可疑内容后开始检测</h3>
+              <p class="risk-summary__desc" id="risk-desc">
+                系统会从话术操控、资金诱导、信息窃取、渠道异常、身份伪装五个维度给出可解释评分。
+              </p>
+            </div>
+          </div>
+
+          <section class="action-block" aria-labelledby="actions-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="actions-title">后续操作</h3>
+              <span class="action-block__badge">检测 + 举报 + 科普</span>
+            </div>
+            <div class="action-grid">
+              <button class="btn btn--danger" id="report-btn" type="button" disabled>一键举报</button>
+              <button class="btn" id="export-btn" type="button" disabled>导出证据</button>
+              <button class="btn" id="copy-btn" type="button" disabled>复制结论</button>
+              <button class="btn btn--ghost" id="feedback-btn" type="button" disabled>标记误报</button>
+            </div>
+            <p class="field-note">
+              举报不会自动向官方平台提交，而是生成结构化举报材料，便于复制到 12321、国家反诈中心 App 或交给民警。
+              <a class="inline-link" href="history.html">查看检测记录 →</a>
+            </p>
+          </section>
+
+          <section class="analysis-block" aria-labelledby="dimensions-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="dimensions-title">评分维度</h3>
+              <span class="analysis-block__count">满分 100</span>
+            </div>
+            <ul class="dimension-list" id="dimension-list">
+              <li class="dimension">
+                <span class="dimension__name">等待检测</span>
+                <span class="dimension__bar"><i style="width: 0%"></i></span>
+                <span class="dimension__score">0</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="analysis-block" aria-labelledby="keywords-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="keywords-title">高危词汇</h3>
+              <span class="analysis-block__count" id="keyword-count">0 项命中</span>
+            </div>
+            <ul class="tag-list" id="keyword-list">
+              <li class="empty-inline">暂未命中高危词汇</li>
+            </ul>
+          </section>
+
+          <section class="analysis-block" aria-labelledby="images-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="images-title">多模态研判</h3>
+              <span class="analysis-block__count" id="image-count">0 项</span>
+            </div>
+            <ul class="risk-media" id="risk-media">
+              <li class="empty-inline">上传文件后展示多模态研判结果</li>
+            </ul>
+          </section>
+
+          <section class="analysis-block" aria-labelledby="evidence-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="evidence-title">风险证据</h3>
+              <span class="analysis-block__count" id="evidence-count">0 条</span>
+            </div>
+            <ul class="evidence-list" id="evidence-list">
+              <li class="empty-inline">检测后在这里展示命中原文与风险权重</li>
+            </ul>
+          </section>
+
+          <section class="analysis-block is-hidden" id="pii-section" aria-labelledby="pii-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="pii-title">个人信息暴露</h3>
+              <span class="analysis-block__count" id="pii-count">0 处</span>
+            </div>
+            <div class="privacy-alert">
+              <strong>建议立即脱敏</strong>
+              <span>以下敏感信息已经打码展示，可点击“一键脱敏”从输入框中替换。</span>
+            </div>
+            <ul class="pii-list" id="pii-list"></ul>
+          </section>
+
+          <section class="analysis-block is-hidden" id="link-section" aria-labelledby="links-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="links-title">可疑链接</h3>
+              <span class="analysis-block__count" id="link-count">0 条</span>
+            </div>
+            <ul class="link-list" id="link-list"></ul>
+          </section>
+
+          <section class="analysis-block" aria-labelledby="suggestions-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="suggestions-title">处置建议</h3>
+              <span class="analysis-block__count" id="suggestion-count">0 条</span>
+            </div>
+            <ol class="suggestion-list" id="suggestion-list">
+              <li class="empty-inline">检测后给出针对性处置建议</li>
+            </ol>
+          </section>
+        </aside>
       </div>
     </section>
 
-    <!-- 右侧：实时风险分析区 -->
-    <aside class="panel panel--analysis" aria-labelledby="analysis-title">
-      <header class="panel__header">
-        <div class="panel__heading">
-          <p class="panel__eyebrow">AI 研判</p>
-          <h2 class="panel__title" id="analysis-title">风险分析</h2>
+    <!-- ==================== 视图二：每日一反诈 ==================== -->
+    <section class="view" id="view-daily" aria-labelledby="daily-title">
+      <div class="page-head">
+        <div class="page-head__heading">
+          <p class="panel__eyebrow">每日一反诈</p>
+          <h2 class="panel__title" id="daily-title">今日最新反诈案例</h2>
         </div>
         <p class="chip chip--ai">
           <span class="chip__dot" aria-hidden="true"></span>
-          实时分析
+          每日推送 · 本地通报 + 全国案例
         </p>
-      </header>
+      </div>
 
-      <!-- 风险总分 -->
-      <div class="risk-overview">
-        <div class="risk-ring" role="img" aria-label="综合诈骗风险 87%，属于高风险">
-          <div class="risk-ring__inner">
-            <strong class="risk-ring__value">87<span>%</span></strong>
-            <span class="risk-ring__label">诈骗风险</span>
+      <div class="daily-layout">
+        <article class="panel daily-card" id="daily-card" aria-live="polite">
+          <div class="daily-card__meta">
+            <span class="tag tag--danger" id="daily-region">本地预警</span>
+            <span class="tag tag--neutral" id="daily-type">机票退改签理赔诈骗</span>
+            <span class="daily-card__date" id="daily-date">近期通报</span>
+          </div>
+          <h3 class="daily-card__title" id="daily-title-text"></h3>
+
+          <div class="daily-card__section">
+            <h4 class="daily-card__subtitle">案情经过</h4>
+            <p class="daily-card__text" id="daily-story"></p>
+          </div>
+
+          <div class="daily-card__section">
+            <h4 class="daily-card__subtitle">套路拆解</h4>
+            <ol class="daily-steps" id="daily-steps"></ol>
+          </div>
+
+          <div class="daily-card__tips" id="daily-tips">
+            <strong>警方提示：</strong>
+            <span id="daily-tips-text"></span>
+          </div>
+
+          <div class="daily-card__actions">
+            <button class="btn btn--primary" type="button" id="daily-next">换一例</button>
+            <span class="daily-card__counter" id="daily-counter"></span>
+          </div>
+        </article>
+
+        <aside class="panel daily-side">
+          <h3 class="panel__title daily-side__title">近期同类套路提醒</h3>
+          <ul class="side-list">
+            <li class="side-list__item">
+              <strong>会议类 APP</strong>
+              <p>凡是陌生来电让下载“会议/投屏/云通话”软件并开启屏幕共享，均为高危操作。</p>
+            </li>
+            <li class="side-list__item">
+              <strong>理赔类话术</strong>
+              <p>航班延误、快递丢件、商品质量问题理赔，只在官方平台核实，不点短信链接。</p>
+            </li>
+            <li class="side-list__item">
+              <strong>学生兼职陷阱</strong>
+              <p>“日赚数百、足不出户”的刷单兼职均为骗局，不垫付、不充值、不下载陌生 APP。</p>
+            </li>
+            <li class="side-list__item side-list__item--warn">
+              <strong>遇到可疑情况</strong>
+              <p>立即停止转账与屏幕共享，保留聊天记录，拨打 96110 咨询或 110 报警。</p>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ==================== 视图三：反诈问答 ==================== -->
+    <section class="view" id="view-quiz" aria-labelledby="quiz-title">
+      <div class="page-head">
+        <div class="page-head__heading">
+          <p class="panel__eyebrow">反诈问答</p>
+          <h2 class="panel__title" id="quiz-title">测一测你的防骗判断力</h2>
+        </div>
+        <p class="chip chip--live">
+          <span class="chip__dot" aria-hidden="true"></span>
+          5 道情景题 · 即时解析
+        </p>
+      </div>
+
+      <div class="quiz-layout">
+        <div class="panel quiz-panel">
+          <div class="quiz-progress" id="quiz-progress"></div>
+          <div id="quiz-list"></div>
+
+          <div class="quiz-result" id="quiz-result" hidden>
+            <p class="quiz-result__score" id="quiz-score"></p>
+            <p class="quiz-result__level" id="quiz-level"></p>
+            <p class="quiz-result__desc" id="quiz-desc"></p>
+            <button class="btn btn--primary" type="button" id="quiz-restart">重新作答</button>
           </div>
         </div>
 
-        <div class="risk-summary">
-          <p class="risk-summary__level">
-            <span class="risk-summary__dot" aria-hidden="true"></span>
-            高风险 · 建议立即停止沟通
-          </p>
-          <h3 class="risk-summary__title">疑似「刷单返利 + 屏幕共享」复合型诈骗</h3>
-          <p class="risk-summary__desc">
-            文本命中刷单、垫付、验证码等典型话术；图片中发现伪造转账凭证。
-            请勿继续转账，也不要开启屏幕共享或提供短信验证码。
-          </p>
+        <aside class="panel daily-side">
+          <h3 class="panel__title daily-side__title">答题要点速记</h3>
+          <ul class="side-list">
+            <li class="side-list__item"><strong>不轻信</strong><p>陌生来电、私信中的身份与福利先核实。</p></li>
+            <li class="side-list__item"><strong>不透露</strong><p>验证码、密码、身份证号、银行卡号不告诉他人。</p></li>
+            <li class="side-list__item"><strong>不转账</strong><p>未经当面/电话核实的转账、垫付一律拒绝。</p></li>
+            <li class="side-list__item"><strong>多核实</strong><p>通过官方渠道、96110 或社区民警二次确认。</p></li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ==================== 视图四：知识宣传 ==================== -->
+    <section class="view" id="view-knowledge" aria-labelledby="knowledge-title">
+      <div class="page-head">
+        <div class="page-head__heading">
+          <p class="panel__eyebrow">知识宣传</p>
+          <h2 class="panel__title" id="knowledge-title">常见电信网络诈骗类型图谱</h2>
         </div>
+        <p class="chip chip--ai">
+          <span class="chip__dot" aria-hidden="true"></span>
+          手法拆解 · 防范要点
+        </p>
       </div>
 
-      <!-- 高危词汇 -->
-      <section class="analysis-block" aria-labelledby="keywords-title">
-        <div class="analysis-block__head">
-          <h3 class="analysis-block__title" id="keywords-title">高危词汇</h3>
-          <span class="analysis-block__count">6 项命中</span>
-        </div>
-        <ul class="tag-list">
-          <li class="tag tag--danger">刷单返利</li>
-          <li class="tag tag--danger">垫付资金</li>
-          <li class="tag tag--danger">验证码</li>
-          <li class="tag tag--danger">屏幕共享</li>
-          <li class="tag tag--danger">账户冻结</li>
-          <li class="tag tag--warn">日赚佣金</li>
-        </ul>
-      </section>
+      <div class="knowledge-grid" id="knowledge-grid"></div>
 
-      <!-- 高风险图片 -->
-      <section class="analysis-block" aria-labelledby="images-title">
-        <div class="analysis-block__head">
-          <h3 class="analysis-block__title" id="images-title">高风险图片</h3>
-          <span class="analysis-block__count">2 张</span>
+      <div class="knowledge-footer">
+        <div class="panel principle-card">
+          <h3 class="principle-card__title">牢记防骗“三不一多”</h3>
+          <ul class="principle-list">
+            <li>未知链接不点击</li>
+            <li>陌生来电不轻信</li>
+            <li>个人信息不透露</li>
+            <li>转账汇款多核实</li>
+          </ul>
         </div>
-
-        <ul class="risk-media">
-          <li class="risk-media__item">
-            <span class="risk-media__preview risk-media__preview--transfer" role="img"
-              aria-label="伪造转账截图缩略图">¥</span>
-            <span class="risk-media__info">
-              <strong>伪造转账截图</strong>
-              <small>OCR 识别金额与真实流水不符</small>
-            </span>
-            <span class="risk-media__score">96%</span>
-          </li>
-
-          <li class="risk-media__item">
-            <span class="risk-media__preview risk-media__preview--qr" role="img"
-              aria-label="收款二维码缩略图"></span>
-            <span class="risk-media__info">
-              <strong>收款二维码</strong>
-              <small>指向未备案的第三方收款页面</small>
-            </span>
-            <span class="risk-media__score">88%</span>
-          </li>
-        </ul>
-      </section>
-
-      <!-- 后续操作区：为举报、科普、证据导出等功能预留 -->
-      <section class="reserved" aria-labelledby="reserved-title">
-        <div class="reserved__head">
-          <h3 class="reserved__title" id="reserved-title">后续操作区</h3>
-          <span class="reserved__badge">预留</span>
+        <div class="panel principle-card principle-card--channels">
+          <h3 class="principle-card__title">预警与求助渠道</h3>
+          <ul class="principle-list principle-list--channels">
+            <li>96110 反诈预警专线：接到来电请务必接听</li>
+            <li>国家反诈中心 APP：开启来电预警，举报可疑信息</li>
+            <li>110 报警：发现被骗立即报警并保留证据</li>
+            <li>12321：举报垃圾短信、诈骗链接与不良信息</li>
+          </ul>
         </div>
-        <div class="reserved__canvas">
-          <span class="reserved__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </span>
-          <p class="reserved__hint">举报 · 科普 · 证据导出</p>
-          <p class="reserved__sub">该区域为后续功能预留，可继续扩展操作入口</p>
-        </div>
-      </section>
-    </aside>
+      </div>
+    </section>
   </main>
 
   <!-- ==================== 页脚 ==================== -->
   <footer class="site-footer">
     <p>赛题 11 · 反诈卫士 · 网络安全方向</p>
-    <p>静态原型 v0.1 · 仅用于比赛演示</p>
+    <p>Python + FastAPI + SQL Server · 本地规则引擎 + Qwen 多模态适配</p>
+    <p class="site-footer__links">
+      <a href="history.html">历史记录</a>
+      <span aria-hidden="true">·</span>
+      <a href="logs.html">运行日志</a>
+    </p>
   </footer>
+
+  <!-- ==================== 举报弹窗 ==================== -->
+  <div class="modal is-hidden" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+    <div class="modal__backdrop" data-close="report-modal"></div>
+    <div class="modal__panel">
+      <header class="modal__header">
+        <div>
+          <p class="panel__eyebrow">生成举报材料</p>
+          <h2 class="modal__title" id="report-modal-title">一键举报</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="report-modal" aria-label="关闭">×</button>
+      </header>
+      <div class="modal__body">
+        <label class="form-label" for="report-channel">举报渠道</label>
+        <select class="form-select" id="report-channel">
+          <option value="12321">12321 网络不良与垃圾信息举报受理中心</option>
+          <option value="110">拨打 110 / 就近派出所</option>
+          <option value="anti_fraud_app">国家反诈中心 App</option>
+          <option value="platform">聊天 / 购物平台官方客服</option>
+        </select>
+
+        <label class="form-label" for="report-note">补充说明（可选）</label>
+        <textarea class="form-textarea" id="report-note" rows="3"
+          placeholder="例如：对方微信号、转账金额、转账时间等"></textarea>
+
+        <div class="report-result is-hidden" id="report-result">
+          <p class="report-result__title">举报材料已生成</p>
+          <p class="report-result__meta" id="report-result-meta"></p>
+          <pre class="report-result__content" id="report-result-content"></pre>
+          <div class="modal__actions">
+            <button class="btn btn--primary btn--sm" id="copy-report-btn" type="button">复制材料</button>
+            <a class="btn btn--sm btn--ghost" id="download-report-btn" href="#" target="_blank" rel="noopener">下载 TXT</a>
+          </div>
+        </div>
+      </div>
+      <footer class="modal__footer">
+        <button class="btn btn--ghost" type="button" data-close="report-modal">取消</button>
+        <button class="btn btn--danger" id="submit-report-btn" type="button">生成举报材料</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ==================== 科普弹窗 ==================== -->
+  <div class="modal is-hidden" id="knowledge-modal" role="dialog" aria-modal="true" aria-labelledby="knowledge-modal-title">
+    <div class="modal__backdrop" data-close="knowledge-modal"></div>
+    <div class="modal__panel">
+      <header class="modal__header">
+        <div>
+          <p class="panel__eyebrow" id="knowledge-modal-category">反诈科普</p>
+          <h2 class="modal__title" id="knowledge-modal-title">安全知识</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="knowledge-modal" aria-label="关闭">×</button>
+      </header>
+      <div class="modal__body">
+        <p class="knowledge-detail" id="knowledge-modal-content"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../js/api.js?v=1.0.0"></script>
+  <script src="../js/app.js?v=1.0.0"></script>
 </body>
 </html>
