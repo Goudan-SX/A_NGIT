@@ -1,5 +1,5 @@
 /* ==========================================================================
-   反诈卫士 · 主页面交互
+   Guardian-AI · 主页面交互
    负责：文本/图片/语音检测、结果渲染、举报材料、每日案例、反诈问答、知识宣传
    ========================================================================== */
 (function () {
@@ -1527,7 +1527,7 @@
       copyBtn.addEventListener('click', function () {
         var analysis = state.analysis;
         if (!analysis) return;
-        var text = '反诈卫士检测结论\n风险：' + analysis.risk_label + ' ' + analysis.risk_score + '%\n' +
+        var text = 'Guardian-AI 检测结论\n风险：' + analysis.risk_label + ' ' + analysis.risk_score + '%\n' +
           '类型：' + analysis.scam_type + '\n结论：' + analysis.summary + '\n建议：\n' +
           (analysis.suggestions || []).map(function (item, index) {
             return (index + 1) + '. ' + item;

@@ -1,4 +1,4 @@
-"""反诈卫士 FastAPI 应用。
+"""Guardian-AI FastAPI 应用。
 
 启动：
     python backend/run.py

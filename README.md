@@ -1,8 +1,8 @@
-# A_NGIT · Guardian-AI 反诈卫士
+# A_NGIT · Guardian-AI
 
-> 赛题 11：反诈卫士——面向青年的 AI 诈骗识别与个人信息保护助手  
-> 细分方向：网络安全  
-> 仓库地址：<https://github.com/Goudan-SX/A_NGIT>
+> Guardian-AI：AI 诈骗识别与个人信息保护助手（赛题 11 · 网络安全）  
+> 仓库地址：<https://github.com/Goudan-SX/A_NGIT>  
+> 安装包用户请先看 [README_安装说明.md](README_安装说明.md)
 
 Guardian-AI 是统一模型名称；它是一个可运行的全栈反诈演示系统：用户粘贴可疑短信/聊天记录，或上传聊天截图、语音，
 系统从**话术操控、资金诱导、信息窃取、渠道异常、身份伪装**五个维度进行可解释风险评分，
@@ -102,7 +102,8 @@ A_NGIT/
 │       ├── app.js                 # 主页面交互与多模态检测
 │       ├── chat.js                # 可选：双人远程聊天 WebSocket
 │       ├── chat-test.js           # 单人聊天测试页脚本
-│       ├── history.js             # 历史记录页
+│       ├── history.js             # 历史记录页（含回收站）
+│       ├── user.js                # 用户中心 / API 配置页
 │       └── logs.js                # 日志页
 ├── backend/
 │   ├── app/
@@ -120,22 +121,36 @@ A_NGIT/
 │   │   ├── ocr_windows.ps1        # WinRT OCR 调用脚本
 │   │   ├── db.py                  # SQL Server 连接与建库
 │   │   ├── repository.py          # 数据仓储层
+│   │   ├── user_db.py             # 用户中心与租户数据
+│   │   ├── runtime_ai.py          # 运行时 OpenAI 兼容 API
+│   │   ├── tenant.py              # user_id / user_key 租户上下文
+│   │   ├── maintenance.py         # 时效数据与回收站维护
 │   │   └── config.py              # 环境变量与路径
 │   ├── ml/                        # 交易风控特征工程与训练脚本
 │   ├── models/                    # LightGBM 模型、元数据、规则 JSON
 │   ├── database/schema.sql        # 表结构 + 科普种子数据
+│   ├── database/user_schema.sql   # 用户中心库表结构
 │   ├── data/                      # 上传文件、关键词与分省案例
 │   ├── seed_demo.py               # 演示数据初始化
 │   ├── requirements.txt
 │   └── run.py                     # 开发启动入口
+├── docs/                          # 需求文档、改造指令、截图、测试素材
+├── scripts/                       # 快捷方式创建、发布打包、文档生成
+├── database/                      # 本机 SQL Server 数据文件与备份（不提交）
+├── bootstrap.py                   # 首次安装初始化（建库/种子/root 密码）
+├── install.bat / start.bat        # 安装 / 启动
+├── start_console.bat / verify.bat # 调试启动 / 健康检查
 ├── .env.example                   # 环境变量示例
-├── run.bat / setup.bat            # Windows 一键启动 / 安装依赖
-└── README.md
+├── run.bat / setup.bat            # 兼容旧入口
+├── README.md
+└── README_安装说明.md
 ```
 
 ---
 
 ## 四、快速启动
+
+> 下载发布包的用户请直接运行 **install.bat**，详见 [README_安装说明.md](README_安装说明.md)。
 
 ### 1. 安装依赖
 

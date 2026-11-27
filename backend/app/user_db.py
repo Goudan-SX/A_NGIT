@@ -23,7 +23,6 @@ import pyodbc
 from . import config, db, tenant
 
 ROOT_USERNAME = "root"
-ROOT_PASSWORD = "zhf123...aA"
 COOKIE_NAME = "guardian_user"
 SESSION_DAYS = 7
 PBKDF2_ITERATIONS = 200_000
@@ -95,7 +94,7 @@ def ensure_database() -> None:
         try:
             cur = master.cursor()
             if not cur.execute("SELECT DB_ID(?)", db_name).fetchone()[0]:
-                cur.execute(f"CREATE DATABASE [{db_name}]")
+                db.create_database(cur, db_name)
         finally:
             master.close()
 
@@ -121,7 +120,7 @@ def _seed_root() -> None:
         ).fetchone()
         if exists:
             return
-        password_hash, salt = hash_password(ROOT_PASSWORD)
+        password_hash, salt = hash_password(config.ROOT_PASSWORD)
         cur.execute(
             """
             INSERT INTO dbo.users (username, user_key, password_hash, password_salt, role)

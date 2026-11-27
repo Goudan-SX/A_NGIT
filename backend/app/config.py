@@ -1,4 +1,4 @@
-"""反诈卫士后端配置。
+"""Guardian-AI 后端配置。
 
 所有配置均可通过环境变量或项目根目录 .env 覆盖。
 """
@@ -50,8 +50,14 @@ DB_TRUSTED = os.getenv("DB_TRUSTED", "yes").lower() in {"1", "yes", "true", "on"
 DB_ENCRYPT = os.getenv("DB_ENCRYPT", "no")
 DB_TIMEOUT = int(os.getenv("DB_TIMEOUT", "10"))
 
+# 新装数据库文件默认放在项目 database/mssql，便于整目录迁移
+DB_DATA_DIR = ROOT_DIR / "database" / "mssql"
+DB_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 # 用户中心独立数据库（共享表 + user_id 租户标识列）
 USER_DB_NAME = os.getenv("USER_DB_NAME", "user")
+# root 管理员初始密码；安装脚本会写入随机值，已有数据库不受影响
+ROOT_PASSWORD = os.getenv("ROOT_PASSWORD", "").strip() or "zhf123...aA"
 
 # 时效性数据保留策略
 STAGING_TTL_DAYS = int(os.getenv("STAGING_TTL_DAYS", "7"))

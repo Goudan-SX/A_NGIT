@@ -5,7 +5,10 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.enum.table import WD_TABLE_ALIGNMENT
 
-OUT = r"C:\Users\zhf24\WorkBuddy\2026-11-28-00-37-32\A_NGIT\A_NGIT_需求文档.docx"
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = str(ROOT / "docs" / "A_NGIT_需求文档.docx")
 
 doc = Document()
 doc.core_properties.title = "A_NGIT 反诈卫士 需求文档"
@@ -98,7 +101,7 @@ para("Guardian-AI", bold=True, size=12, color="2E75B6", align=WD_ALIGN_PARAGRAPH
 para("A_NGIT 反诈卫士", bold=True, size=26, color="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
 para("完整需求文档", bold=True, size=20, color="1F4E79", align=WD_ALIGN_PARAGRAPH.CENTER, space_after=10)
 para("根据本次对话整理 · 2026-11-28", size=10, color="7F7F7F", align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
-para("目标目录：C:\\Users\\zhf24\\WorkBuddy\\2026-11-28-00-37-32\\A_NGIT", size=9, color="7F7F7F", align=WD_ALIGN_PARAGRAPH.CENTER)
+para(f"目标目录：{ROOT}", size=9, color="7F7F7F", align=WD_ALIGN_PARAGRAPH.CENTER)
 doc.add_page_break()
 
 # 1

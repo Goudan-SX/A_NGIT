@@ -163,18 +163,26 @@ def choose_windows(first_run: bool = False) -> bool:
     return bool(result["ok"])
 
 
+ICON_PATH = Path(__file__).with_name("guardian-icon.png")
+
+
 def icon_image() -> Image.Image:
-    size = 64
-    image = Image.new("RGBA", (size, size), (255, 255, 255, 255))
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((5, 5, size - 5, size - 5), outline=(17, 17, 17, 255), width=5)
+    """应用图标：沿用废弃扩展方案的 G 圆环图标；缺失时退回收绘。"""
     try:
-        font = ImageFont.truetype(r"C:\Windows\Fonts\msyhbd.ttc", 36)
-    except OSError:
-        font = ImageFont.load_default()
-    box = draw.textbbox((0, 0), "G", font=font)
-    draw.text(((size - (box[2] - box[0])) / 2, (size - (box[3] - box[1])) / 2 - 2), "G", fill=(17, 17, 17, 255), font=font)
-    return image
+        return Image.open(ICON_PATH).convert("RGBA")
+    except Exception:  # noqa: BLE001
+        size = 64
+        image = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((5, 5, size - 5, size - 5), outline=(17, 17, 17, 255), width=5)
+        try:
+            font = ImageFont.truetype(r"C:\Windows\Fonts\msyhbd.ttc", 36)
+        except OSError:
+            font = ImageFont.load_default()
+        box = draw.textbbox((0, 0), "G", font=font)
+        draw.text(((size - (box[2] - box[0])) / 2, (size - (box[3] - box[1])) / 2 - 2), "G",
+                  fill=(17, 17, 17, 255), font=font)
+        return image
 
 
 def visible_rect(control) -> tuple[int, int, int, int] | None:

@@ -63,7 +63,7 @@ def ensure_database() -> None:
             cur = master.cursor()
             exists = cur.execute("SELECT DB_ID(?)", db_name).fetchone()[0]
             if not exists:
-                cur.execute(f"CREATE DATABASE [{db_name}]")
+                create_database(cur, db_name)
         finally:
             master.close()
 
@@ -76,6 +76,27 @@ def ensure_database() -> None:
         finally:
             conn.close()
         _schema_ready = True
+
+
+def _sql_path(value: Path) -> str:
+    return str(value).replace("'", "''")
+
+
+def create_database(cur: pyodbc.Cursor, db_name: str, data_dir: Path | None = None) -> None:
+    """新装数据库文件放到项目 database/mssql；失败时回退 LocalDB 默认目录。"""
+    directory = Path(data_dir or config.DB_DATA_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    mdf = directory / f"{db_name}.mdf"
+    ldf = directory / f"{db_name}_log.ldf"
+    try:
+        cur.execute(
+            f"CREATE DATABASE [{db_name}] ON PRIMARY "
+            f"(NAME = N'{db_name}', FILENAME = N'{_sql_path(mdf)}') "
+            f"LOG ON (NAME = N'{db_name}_log', FILENAME = N'{_sql_path(ldf)}')"
+        )
+    except pyodbc.Error:
+        # 项目目录不可写（例如放在 Program Files）时退回实例默认目录
+        cur.execute(f"CREATE DATABASE [{db_name}]")
 
 
 def execute_script(conn: pyodbc.Connection, script: str) -> None:

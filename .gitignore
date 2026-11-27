@@ -56,3 +56,12 @@ backend/data/conversations.db
 
 # 备份文件
 *.bak
+
+# 本机 SQL Server 数据文件与备份（不提交）
+database/
+# 本机测试素材与截图
+docs/测试用/
+docs/previews/
+
+# 发布包输出
+dist/
