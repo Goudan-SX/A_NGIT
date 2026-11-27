@@ -373,6 +373,12 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
             if len(cleaned) <= 60 and cleaned not in GENERIC_CONTACTS and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
                 contact = cleaned[:60]
                 break
+    # QQ 窗口标题是当前登录用户昵称，绝不能当对方 ID（兼容简繁/OCR 误差）。
+    if contact and window_title:
+        cnorm = contact.strip().replace("舊", "旧")
+        wnorm = window_title.strip().replace("舊", "旧")
+        if cnorm == wnorm or (len(cnorm) >= 2 and (cnorm in wnorm or wnorm in cnorm)) or SequenceMatcher(None, cnorm, wnorm).ratio() >= 0.75:
+            contact = ""
     if not contact or contact in GENERIC_CONTACTS:
         return None
 
