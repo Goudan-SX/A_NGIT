@@ -18,7 +18,7 @@ $form.Controls.Add($label1)
 $pathBox = New-Object System.Windows.Forms.TextBox
 $pathBox.Location = New-Object System.Drawing.Point(120, 25)
 $pathBox.Size = New-Object System.Drawing.Size(390, 26)
-$pathBox.Text = (Join-Path $env:LOCALAPPDATA 'Guardian-AI')
+if (Test-Path 'D:\') { $pathBox.Text = 'D:\Guardian-AI\client' } else { $pathBox.Text = (Join-Path $env:LOCALAPPDATA 'Guardian-AI') }
 $form.Controls.Add($pathBox)
 
 $browse = New-Object System.Windows.Forms.Button

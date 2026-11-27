@@ -33,7 +33,7 @@ Guardian-AI 是一个本地运行的 Web + FastAPI 后端反诈识别系统，�
 如果其他用户要使用你电脑上的中心数据库，不要让他们运行 install.bat（那会在他们本机建独立数据库）。请把安装包发给他们，让他们运行：
 
 1. **Client-Setup.bat**
-2. 选择安装目录（默认当前用户目录下的 Guardian-AI）
+2. 选择安装目录（默认 D:\Guardian-AI\client；D 盘不存在时才回退用户目录）
 3. 填写管理员提供的公网服务器地址（例如 `https://xxx.ts.net` 或 Cloudflare 地址）
 4. 点击“开始安装”，会创建桌面/开始菜单 Guardian-AI 快捷方式，以应用窗口打开网页。
 
