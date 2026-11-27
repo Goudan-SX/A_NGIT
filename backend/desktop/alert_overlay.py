@@ -213,7 +213,8 @@ def _serve() -> None:
         now = time.monotonic()
         repeated = (now - last_alert_at) < 60 and last_alert_at > 0
         last_alert_at = now
-        persistent = repeated
+        # 超过 90 分直接红框常驻；70-89 首次白框，短时间重复再转红。
+        persistent = repeated or score >= 90
         clear_jobs()
         set_colors(repeated)
         head.configure(text="Guardian-AI · 持续高风险" if repeated else "Guardian-AI 风险提醒")

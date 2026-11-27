@@ -849,7 +849,20 @@ def analyze_text(text: str, *, engine_name: str = "guardian-rule-v1") -> dict[st
         scores[key] = max(0, min(meta["max"], scores[key]))
     score = int(round(sum(scores.values())))
     score = _pii_risk_floor(score, pii)
-    score = max(0, min(100, score))
+
+    # 关键词频率加成：复用现有关键词库的命中次数，重复出现说明话术持续施压/反复诱导。
+    keyword_frequency = sum(int(item.get("count", 1)) for item in evidence if not item.get("protective"))
+    if keyword_frequency >= 15:
+        keyword_boost = 35
+    elif keyword_frequency >= 10:
+        keyword_boost = 30
+    elif keyword_frequency >= 6:
+        keyword_boost = 18
+    elif keyword_frequency >= 3:
+        keyword_boost = 8
+    else:
+        keyword_boost = 0
+    score = max(0, min(100, score + keyword_boost))
     level = _level_for(score)
     scam_type = _pick_scam_type(votes, score)
     summary = _summary_for(level, scam_type, score, len([item for item in evidence if not item.get("protective")]), len(pii))
@@ -877,11 +890,15 @@ def analyze_text(text: str, *, engine_name: str = "guardian-rule-v1") -> dict[st
         "pii_score": min(25, sum(PII_WEIGHTS.get(item["type"], 0) * min(item["count"], 2) for item in pii)),
         "links": links,
         "suggestions": suggestions,
+        "keyword_frequency": keyword_frequency,
+        "keyword_frequency_boost": keyword_boost,
         "stats": {
             "chars": len(clean),
             "lines": len([line for line in clean.splitlines() if line.strip()]),
             "signals": len([item for item in evidence if not item.get("protective")]),
             "protective": protective_count,
+            "keyword_frequency": keyword_frequency,
+            "keyword_boost": keyword_boost,
         },
         "engine": {"name": engine_name, "ai": False, "duration_ms": elapsed},
         "modalities": [],

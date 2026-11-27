@@ -271,8 +271,15 @@
     renderDimensions(dimensions);
     var dimensionNote = $('dimension-note');
     if (dimensionNote) {
+      var notes = [];
       if (result.guardian && result.guardian.modality_score) {
-        dimensionNote.textContent = '综合风险含图像视觉评分：' + result.guardian.modality_score + '%';
+        notes.push('综合风险含图像视觉评分：' + result.guardian.modality_score + '%');
+      }
+      if (result.keyword_frequency >= 3 && result.keyword_frequency_boost) {
+        notes.push('关键词重复 ' + result.keyword_frequency + ' 次，频率加成 +' + result.keyword_frequency_boost);
+      }
+      if (notes.length) {
+        dimensionNote.textContent = notes.join(' · ');
         show(dimensionNote);
       } else {
         hide(dimensionNote);
