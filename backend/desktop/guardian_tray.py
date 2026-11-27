@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import ctypes
 import hashlib
+from difflib import SequenceMatcher
 import json
 import os
 import re
@@ -252,7 +253,7 @@ def detect_chat_layout(rect: tuple[int, int, int, int], window_title: str) -> di
         contact = layout.get("contact") or {}
         if not all(isinstance(chat.get(k), (int, float)) for k in ("x", "y", "w", "h")):
             return None
-        if not layout.get("contact_text") and contact:
+        if contact:
             try:
                 cw, ch = image.size
                 cx = int(float(contact.get("x", 0)) * cw)
@@ -366,20 +367,23 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
         chat_box = (left + int((right - left) * 0.25), top + 115, right, bottom)
 
     contact = str((layout or {}).get("contact_text") or "").strip()[:60]
+    # 先排除模型把窗口标题/当前用户昵称当联系人的情况，再回退到头部 OCR。
+    def is_self_title(value: str) -> bool:
+        if not value or not window_title:
+            return False
+        cnorm = value.strip().replace("舊", "旧")
+        wnorm = window_title.strip().replace("舊", "旧")
+        return cnorm == wnorm or (len(cnorm) >= 2 and (cnorm in wnorm or wnorm in cnorm)) or SequenceMatcher(None, cnorm, wnorm).ratio() >= 0.75
+    if contact and is_self_title(contact):
+        contact = ""
     if not contact or contact in GENERIC_CONTACTS:
         header_text = _ocr_region(header_box)
         for line in (header_text or "").splitlines():
             cleaned = line.strip(" ·|｜")
-            if len(cleaned) <= 60 and cleaned not in GENERIC_CONTACTS and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
+            if len(cleaned) <= 60 and cleaned not in GENERIC_CONTACTS and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned) and not is_self_title(cleaned):
                 contact = cleaned[:60]
                 break
-    # QQ 窗口标题是当前登录用户昵称，绝不能当对方 ID（兼容简繁/OCR 误差）。
-    if contact and window_title:
-        cnorm = contact.strip().replace("舊", "旧")
-        wnorm = window_title.strip().replace("舊", "旧")
-        if cnorm == wnorm or (len(cnorm) >= 2 and (cnorm in wnorm or wnorm in cnorm)) or SequenceMatcher(None, cnorm, wnorm).ratio() >= 0.75:
-            contact = ""
-    if not contact or contact in GENERIC_CONTACTS:
+    if not contact or contact in GENERIC_CONTACTS or is_self_title(contact):
         return None
 
     rows = _ocr_region_lines(chat_box, mask_overlay=True)
