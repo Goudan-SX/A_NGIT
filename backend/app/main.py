@@ -1242,6 +1242,11 @@ def index_page_explicit() -> FileResponse:
     return FileResponse(config.FRONTEND_DIR / "html" / "index.html")
 
 
+@app.get("/chat-test.html")
+def chat_test_page() -> FileResponse:
+    return FileResponse(config.FRONTEND_DIR / "html" / "chat-test.html")
+
+
 @app.get("/chat.html")
 def chat_page() -> FileResponse:
     return FileResponse(config.FRONTEND_DIR / "html" / "chat.html")

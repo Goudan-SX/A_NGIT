@@ -41,8 +41,8 @@
       var dy = event.clientY - drag.startY;
       if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
       if (!drag.moved) return;
-      var left = Math.max(4, Math.min(window.innerWidth - 62, drag.left + dx));
-      var top = Math.max(4, Math.min(window.innerHeight - 62, drag.top + dy));
+      var left = Math.max(4, Math.min(window.innerWidth - 48, drag.left + dx));
+      var top = Math.max(4, Math.min(window.innerHeight - 48, drag.top + dy));
       badge.style.left = left + 'px';
       badge.style.top = top + 'px';
       badge.style.right = 'auto';
@@ -55,10 +55,12 @@
 
   function isChatPage() {
     var url = (location.hostname + location.pathname + location.search).toLowerCase();
-    if (/wx\.qq\.com|web\.wechat\.com|wechat|chat|message|im\//.test(url)) return true;
+    if (/wx\.qq\.com|web\.wechat\.com|wechat|whatsapp|telegram|discord|messenger|slack|teams|dingtalk|feishu|lark|weibo|chat|message|im\//.test(url)) return true;
     var selectors = [
       '#chatArea', '.chat_bd', '.chat-scroll', '[role="log"]',
-      '[class*="chat"]', '[class*="message"]', '[class*="msg"]'
+      '[data-testid*="message" i]', '[data-pre-plain-text]',
+      '.message-in', '.message-out',
+      '[class*="chat"]', '[class*="message" i]', '[class*="msg"]'
     ];
     return selectors.some(function (selector) {
       try {
@@ -82,12 +84,18 @@
       '.chat_bd .js_message',
       '.chat_bd .bubble_cont',
       '.chat_bd [class*="message"]',
-      '[class*="message-list"] [class*="message"]',
-      '[class*="chat"] [class*="message"]',
+      '[class*="message-list"] [class*="message" i]',
+      '[class*="chat"] [class*="message" i]',
       '[class*="chat"] [class*="msg"]',
       '[role="log"] li',
       '[data-message-id]',
+      '[data-testid*="message" i]',
+      '[data-pre-plain-text]',
+      '[id^="message-content-"]',
+      '.message-in',
+      '.message-out',
       '.bubble',
+      '.chat-bubble',
       '.msg-content'
     ];
     var nodes = [];

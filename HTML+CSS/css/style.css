@@ -2803,6 +2803,77 @@ svg {
   }
 }
 
+/* 单人聊天测试页：聊天窗口固定居中 */
+.single-chat-body {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 420px at 50% -120px, rgba(37, 99, 235, 0.12), transparent 70%),
+    var(--gray-50);
+}
+
+.single-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(780px, 100% - 32px);
+  min-height: calc(100vh - var(--header-height) - 90px);
+  margin: 24px auto;
+}
+
+.single-chat__shell {
+  width: 100%;
+  height: calc(100vh - var(--header-height) - 138px);
+  min-height: 560px;
+  max-height: 860px;
+}
+
+.single-chat__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.single-chat__tools .form-select {
+  width: auto;
+  min-width: 118px;
+}
+
+.single-chat__hint {
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--gray-500);
+  background-color: var(--blue-50);
+  border-radius: var(--radius-md);
+}
+
+.single-chat__log {
+  flex: 1;
+  min-height: 280px;
+  max-height: none;
+}
+
+@media (max-width: 640px) {
+  .single-chat {
+    width: calc(100% - 20px);
+    margin: 12px auto;
+  }
+
+  .single-chat__shell {
+    height: calc(100vh - var(--header-height) - 112px);
+    min-height: 480px;
+  }
+
+  .single-chat__tools {
+    width: 100%;
+  }
+
+  .single-chat__tools .form-select {
+    flex: 1;
+  }
+}
+
 /* ==========================================================================
    17. 历史记录 / 运行日志 子页面
    ========================================================================== */

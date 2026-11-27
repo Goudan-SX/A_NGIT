@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>单人聊天测试 · Guardian-AI</title>
+  <link rel="stylesheet" href="../css/style.css?v=1.3.0" />
+</head>
+<body class="single-chat-body">
+  <h1 class="visually-hidden">Guardian-AI 单人聊天测试页</h1>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="index.html" aria-label="Guardian-AI 首页">
+        <span class="brand__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 4.5 6v6c0 4.2 3.1 7.6 7.5 9 4.4-1.4 7.5-4.8 7.5-9V6L12 3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </span>
+        <span class="brand__text">
+          <span class="brand__name">反诈卫士</span>
+          <span class="brand__slogan">Guardian-AI · 单人聊天测试</span>
+        </span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a class="site-nav__link" href="index.html">AI 管家</a>
+        <a class="site-nav__link" href="history.html">历史记录</a>
+        <a class="site-nav__link" href="logs.html">日志</a>
+      </nav>
+      <p class="guard-status">
+        <span class="guard-status__dot" aria-hidden="true"></span>
+        <span>本地测试页</span>
+      </p>
+    </div>
+  </header>
+
+  <main class="single-chat">
+    <section class="panel single-chat__shell" aria-labelledby="single-chat-title">
+      <header class="panel__header">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">聊天测试</p>
+          <h2 class="panel__title" id="single-chat-title">模拟对话</h2>
+        </div>
+        <div class="single-chat__tools">
+          <label class="visually-hidden" for="scenario-select">测试场景</label>
+          <select class="form-select" id="scenario-select">
+            <option value="normal">正常聊天</option>
+            <option value="game">游戏皮肤诈骗</option>
+            <option value="sidejob">刷单返利诈骗</option>
+            <option value="police">冒充公检法</option>
+          </select>
+          <button class="btn btn--ghost btn--sm" id="demo-btn" type="button">一键演示</button>
+          <button class="btn btn--ghost btn--sm" id="reset-btn" type="button">重置</button>
+        </div>
+      </header>
+
+      <p class="single-chat__hint">这个页面只用于单人测试：你发送消息，页面模拟“对方”回复。浏览器插件会实时读取消息并显示风险环。</p>
+
+      <div class="chat-log single-chat__log" id="single-chat-log" role="log" aria-live="polite"></div>
+
+      <div class="chat-composer">
+        <label class="visually-hidden" for="single-chat-input">输入消息</label>
+        <textarea id="single-chat-input" class="chat-composer__input" rows="2"
+          placeholder="输入消息，Enter 发送，Shift+Enter 换行…"></textarea>
+        <button class="btn btn--primary" id="single-chat-send" type="button">发送</button>
+      </div>
+      <p class="field-note">单人测试页不会保存聊天内容；检测只由浏览器插件对当前消息执行。</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Guardian-AI · 单人聊天测试页</p>
+    <p>用于验证浏览器悬浮窗的实时检测</p>
+    <p class="site-footer__links"><a href="index.html">返回检测台</a></p>
+  </footer>
+
+  <script src="../js/chat-test.js?v=1.3.0"></script>
+</body>
+</html>
