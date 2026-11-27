@@ -3448,3 +3448,82 @@ svg {
   flex: 1;
   min-width: 150px;
 }
+
+/* 对话用户列表 */
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.contact-card {
+  padding: 14px;
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.contact-card--high {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12);
+}
+
+.contact-card--critical {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.14);
+}
+
+.contact-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.contact-card__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gray-700);
+  overflow-wrap: anywhere;
+}
+
+.contact-card__name--high {
+  color: #b45309;
+}
+
+.contact-card__name--critical {
+  color: #b91c1c;
+}
+
+.contact-card__score {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.contact-card__summary {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--gray-500);
+  overflow-wrap: anywhere;
+}
+
+.contact-card__meta {
+  font-size: 11px;
+  color: var(--gray-400);
+}
+
+.contact-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.contact-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}

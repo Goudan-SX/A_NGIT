@@ -29,7 +29,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from . import (ai_common, ai_policy, analyzer, case_matcher, config, content_store, db, deepseek,
-               guardian, monitor_state, ocr, qwen, repository, result_cache, security, transaction_risk)
+               conversation_store, guardian, monitor_state, ocr, qwen, repository, result_cache, security, transaction_risk)
 from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
@@ -308,6 +308,24 @@ def health() -> dict[str, Any]:
             "staging_contents": content_store.count_staging(),
         },
     }
+
+
+@app.get("/api/conversations")
+def api_conversations() -> dict[str, Any]:
+    return {"ok": True, "items": conversation_store.list_contacts()}
+
+
+@app.get("/api/conversations/{contact_id}")
+def api_conversation(contact_id: str) -> dict[str, Any]:
+    item = conversation_store.get(contact_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="对话记录不存在或已过期")
+    return {"ok": True, "item": item}
+
+
+@app.delete("/api/conversations/{contact_id}")
+def api_delete_conversation(contact_id: str) -> dict[str, Any]:
+    return {"ok": True, "deleted": conversation_store.delete(contact_id)}
 
 
 @app.get("/api/config")

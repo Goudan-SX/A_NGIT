@@ -51,3 +51,5 @@ backend/data/launcher.log
 backend/data/overlay_state.json
 backend/data/overlay_state.tmp
 backend/data/backend.pid
+
+backend/data/conversations.db

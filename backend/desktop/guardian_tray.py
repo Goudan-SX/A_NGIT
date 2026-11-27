@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -29,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.app import analyzer, config, ocr, security  # noqa: E402
+from backend.app import analyzer, config, conversation_store, ocr, security  # noqa: E402
 from backend.desktop import alert_overlay, single_instance  # noqa: E402
 
 CONFIG_PATH = config.DATA_DIR / "tray_config.json"
@@ -189,6 +190,74 @@ def allowed(title: str) -> bool:
     return any(item and (item == title or item in title or title in item) for item in _allowed_titles)
 
 
+def collect_chat_texts(control, pane_left: int, top_y: int, deadline: float,
+                       depth: int = 0, rows: list[tuple[int, int, str]] | None = None) -> list[tuple[int, int, str]]:
+    rows = rows if rows is not None else []
+    if time.monotonic() > deadline or depth > 5 or len(rows) >= 120:
+        return rows
+    try:
+        ctype = control.ControlTypeName
+        if ctype in {"TextControl", "DocumentControl"}:
+            name = (control.Name or "").strip()
+            rect = visible_rect(control)
+            if name and rect and len(name) <= 800:
+                left, top, right, bottom = rect
+                if left >= pane_left and top >= top_y:
+                    rows.append((top, left, name))
+        for child in control.GetChildren():
+            collect_chat_texts(child, pane_left, top_y, deadline, depth + 1, rows)
+    except Exception:  # noqa: BLE001
+        pass
+    return rows
+
+
+def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
+    """只读取当前聊天主区域：过滤左侧会话栏/搜索栏，保留不同消息文本。"""
+    try:
+        top = auto.GetForegroundControl().GetTopLevelControl()
+        rect = visible_rect(top)
+        if not rect:
+            return None
+        left, top_y, right, bottom = rect
+        pane_left = left + max(240, int((right - left) * 0.25))
+        texts = collect_chat_texts(top, pane_left, top_y + 35, time.monotonic() + 0.5)
+        if not texts:
+            return None
+        texts.sort(key=lambda item: (item[0], item[1]))
+        header = []
+        messages = []
+        for y, x, value in texts:
+            if y <= top_y + 115:
+                if value not in {"搜索", "发送", "微信"} and not re.fullmatch(r"\d{1,2}:\d{2}", value):
+                    header.append(value)
+            elif not re.fullmatch(r"\d{1,2}:\d{2}", value):
+                messages.append(value)
+        contact = (header[0] if header else (window_title or "未知用户")).strip()[:60]
+        # 从最新消息往前截取，避免长文本把输入/请求拖慢。
+        cleaned = []
+        total = 0
+        for value in reversed(messages):
+            value = value.strip()
+            if not value or value in {"发送", "长按鼠标", "语音输入", "表情"}:
+                continue
+            value = value[:500]
+            if total + len(value) > 3000:
+                break
+            cleaned.append(value)
+            total += len(value)
+        cleaned.reverse()
+        if not cleaned:
+            return None
+        return contact, cleaned
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def format_chat(contact: str, messages: list[str]) -> str:
+    stamp = time.strftime("%H:%M")
+    return "\n".join(f"{stamp} ： {contact}：{message}" for message in messages)
+
+
 def read_visible_text(window_title: str) -> str:
     try:
         control = auto.GetForegroundControl().GetTopLevelControl()
@@ -307,26 +376,35 @@ def tick() -> None:
     if not found or not active:
         return
     title = found[0]
-    text = read_visible_text(title)
-    if len(text) < 4:
+    snapshot = read_chat_snapshot(title)
+    if not snapshot:
         return
-    digest = hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+    contact, messages = snapshot
+    text = format_chat(contact, messages)
+    digest = hashlib.sha256((contact + "|" + text).encode("utf-8", errors="ignore")).hexdigest()
     if digest == _last_hash:
         return
     _last_hash = digest
-    data = analyze(text, title)
+    data = analyze(text, contact)
     if not data or not data.get("analysis"):
         return
     result = data["analysis"]
+    conversation_store.save(
+        contact_id=contact,
+        contact_name=contact,
+        window_title=title,
+        text=analyzer.mask_text(text, result),
+        result=result,
+    )
     score = int(result.get("risk_score", 0))
     if score >= 70:
-        alert_overlay.alert(score, str(result.get("summary", "")), title)
+        alert_overlay.alert(score, str(result.get("summary", "")), contact)
         key = digest[:16]
         if key != _last_alert_key or time.time() - _last_alert_at > ALERT_COOLDOWN:
             _last_alert_key = key
             _last_alert_at = time.time()
-            record_alert(title, result)
-            notify(title, result)
+            record_alert(contact, result)
+            notify(contact, result)
     if _icon:
         _icon.title = f"Guardian-AI · 监测中 · 最近 {score}%"
 

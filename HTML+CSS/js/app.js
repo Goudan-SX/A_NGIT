@@ -1963,11 +1963,127 @@
   /* ------------------------------------------------------------------------
    * 八、视图切换与初始化
    * ---------------------------------------------------------------------- */
+
+  function renderContacts(items) {
+    var grid = $('contact-list');
+    var empty = $('contact-empty');
+    var select = $('contact-select');
+    if (select) {
+      select.innerHTML = '<option value="">选择更新到的用户</option>';
+      (items || []).forEach(function (item) {
+        var score = Number(item.risk_score || 0);
+        var option = document.createElement('option');
+        option.value = item.contact_id;
+        option.textContent = (score >= 70 ? '⚠ ' : '') + (item.contact_name || item.contact_id) + ' · ' + score + '%';
+        select.appendChild(option);
+      });
+    }
+    if (!grid) return;
+    grid.innerHTML = '';
+    if (!items || !items.length) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    items.forEach(function (item) {
+      var score = Number(item.risk_score || 0);
+      var card = document.createElement('article');
+      card.className = 'contact-card' + (score >= 90 ? ' contact-card--critical' : (score >= 70 ? ' contact-card--high' : ''));
+      var head = document.createElement('div');
+      head.className = 'contact-card__head';
+      var name = document.createElement('strong');
+      name.className = 'contact-card__name' + (score >= 90 ? ' contact-card__name--critical' : (score >= 70 ? ' contact-card__name--high' : ''));
+      name.textContent = item.contact_name || item.contact_id;
+      var scoreEl = document.createElement('span');
+      scoreEl.className = 'contact-card__score';
+      scoreEl.textContent = score + '%';
+      head.appendChild(name);
+      head.appendChild(scoreEl);
+      var summary = document.createElement('p');
+      summary.className = 'contact-card__summary';
+      summary.textContent = item.summary || '暂无摘要';
+      var meta = document.createElement('p');
+      meta.className = 'contact-card__meta';
+      meta.textContent = (item.risk_label || '') + ' · 更新 ' + (item.updated_at || '') + ' · 过期 ' + (item.expires_at || '');
+      var actions = document.createElement('div');
+      actions.className = 'contact-card__actions';
+      var load = document.createElement('button');
+      load.className = 'btn btn--primary btn--sm';
+      load.type = 'button';
+      load.textContent = '载入检测';
+      load.addEventListener('click', function () { loadContact(item.contact_id); });
+      var del = document.createElement('button');
+      del.className = 'btn btn--ghost btn--sm';
+      del.type = 'button';
+      del.textContent = '删除记录';
+      del.addEventListener('click', function () { deleteContact(item.contact_id); });
+      actions.appendChild(load);
+      actions.appendChild(del);
+      card.appendChild(head);
+      card.appendChild(summary);
+      card.appendChild(meta);
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+  }
+
+  function loadContacts() {
+    API.get('/api/conversations').then(function (data) {
+      renderContacts(data.items || []);
+    }).catch(function () {
+      renderContacts([]);
+    });
+  }
+
+  function loadContact(contactId) {
+    API.get('/api/conversations/' + encodeURIComponent(contactId)).then(function (data) {
+      var item = data.item;
+      if (!item) return;
+      switchView('monitor');
+      var input = $('chat-text');
+      if (input) {
+        input.value = item.text || '';
+        updateChatStats();
+      }
+      state.analysis = item.result || {};
+      state.analysisId = null;
+      state.saved = false;
+      state.monitorAt = 0;
+      renderAnalysis(item.result || {});
+      setEngine('对话记录', '按对方 ID 隔离的临时记录');
+      setGuard('记录已载入', true);
+    }).catch(function (error) {
+      toast('对话记录载入失败：' + error.message, 'error');
+    });
+  }
+
+  function deleteContact(contactId) {
+    if (!window.confirm('确定删除这个对话记录？')) return;
+    API.remove('/api/conversations/' + encodeURIComponent(contactId)).then(function () {
+      toast('对话记录已删除', 'success');
+      loadContacts();
+    }).catch(function (error) {
+      toast('删除失败：' + error.message, 'error');
+    });
+  }
+
+  function bindContacts() {
+    var refresh = $('refresh-contacts');
+    if (refresh) refresh.addEventListener('click', loadContacts);
+    var select = $('contact-select');
+    if (select) {
+      select.addEventListener('change', function () {
+        if (select.value) loadContact(select.value);
+      });
+    }
+  }
+
   function switchView(name) {
     document.querySelectorAll('.view').forEach(function (view) {
       view.classList.toggle('is-active', view.id === 'view-' + name);
     });
     if (name === 'images') renderImageCaptures();
+    if (name === 'contacts') loadContacts();
     document.querySelectorAll('[data-view-link]').forEach(function (link) {
       var active = link.getAttribute('data-view-link') === name;
       link.classList.toggle('site-nav__link--active', active);
@@ -2008,6 +2124,7 @@
 
   function init() {
     bindViews();
+    bindContacts();
     bindTextEvents();
     bindUploader();
     bindRecorder();
