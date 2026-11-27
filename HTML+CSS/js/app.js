@@ -925,6 +925,10 @@
 
   function saveImageCaptures(items) {
     var list = items.slice(0, 24);
+    if (!list.length) {
+      localStorage.removeItem(IMAGE_CAPTURE_KEY);
+      return true;
+    }
     while (list.length) {
       try {
         localStorage.setItem(IMAGE_CAPTURE_KEY, JSON.stringify(list));
