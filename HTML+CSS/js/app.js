@@ -230,6 +230,7 @@
       : '暂未识别到典型诈骗话术';
     setText($('risk-title'), title);
     setText($('risk-desc'), result.summary || '');
+    renderMatch(result.match, result);
 
     renderDimensions(result.dimensions || []);
     renderKeywords(result.matched_keywords || [], result.signals || []);
@@ -264,6 +265,7 @@
     setText($('risk-level-text'), '等待检测');
     setText($('risk-title'), '粘贴可疑内容后开始检测');
     setText($('risk-desc'), '系统会从话术操控、资金诱导、信息窃取、渠道异常、身份伪装五个维度给出可解释评分。');
+    hide($('match-badge'));
     setText($('keyword-count'), '0 项命中');
     setText($('evidence-count'), '0 条');
     setText($('image-count'), '0 项');
@@ -323,6 +325,35 @@
     state.analysis = fallback;
     renderAnalysis(fallback);
     renderMedia();
+  }
+
+  function renderMatch(match, result) {
+    var badge = $('match-badge');
+    var label = $('match-badge-text');
+    if (!badge || !label) return;
+    if (!match || typeof match.hit !== 'boolean') {
+      hide(badge);
+      return;
+    }
+    badge.classList.remove('match-badge--hit', 'match-badge--ai');
+    if (match.hit) {
+      badge.classList.add('match-badge--hit');
+      var similarity = Math.round((match.similarity || 0) * 100);
+      var review = match.reviewed_by_ai ? 'AI 已复核' : 'AI 复核不可用';
+      label.textContent = '数据库命中 #' + match.case_id + ' · ' + (match.title || '历史案例') +
+        ' · 相似度 ' + similarity + '% · ' + review;
+    } else {
+      badge.classList.add('match-badge--ai');
+      var engine = (result && result.engine) || {};
+      var engineName = engine.provider === 'deepseek' ? 'DeepSeek V4.1' :
+        (engine.ai ? 'Qwen' : '本地规则');
+      label.textContent = '数据库未命中 · ' + engineName + ' 分析' +
+        (match.stored_as_case ? ' · 已收录为新案例' : '');
+      if (match.nearest && match.nearest.similarity) {
+        label.textContent += ' · 最相近案例 ' + Math.round(match.nearest.similarity * 100) + '%';
+      }
+    }
+    show(badge);
   }
 
   function renderDimensions(items) {

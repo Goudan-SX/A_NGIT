@@ -90,6 +90,32 @@ BEGIN
     );
 END
 
+IF OBJECT_ID('dbo.scam_cases', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.scam_cases (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        title           NVARCHAR(200) NOT NULL,
+        category        NVARCHAR(64) NOT NULL,
+        content         NVARCHAR(MAX) NOT NULL,
+        content_norm    NVARCHAR(MAX) NOT NULL,
+        content_hash    CHAR(64) NOT NULL,
+        risk_score      INT NOT NULL,
+        risk_level      NVARCHAR(16) NOT NULL,
+        scam_type       NVARCHAR(64) NULL,
+        summary         NVARCHAR(1000) NULL,
+        result_json     NVARCHAR(MAX) NOT NULL,
+        source          NVARCHAR(32) NOT NULL CONSTRAINT DF_cases_source DEFAULT 'seed',
+        hit_count       INT NOT NULL CONSTRAINT DF_cases_hits DEFAULT 0,
+        is_active       BIT NOT NULL CONSTRAINT DF_cases_active DEFAULT 1,
+        created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_cases_created DEFAULT SYSDATETIME(),
+        updated_at      DATETIME2(0) NOT NULL CONSTRAINT DF_cases_updated DEFAULT SYSDATETIME(),
+        CONSTRAINT UQ_cases_hash UNIQUE (content_hash)
+    );
+END
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_cases_active' AND object_id = OBJECT_ID('dbo.scam_cases'))
+    CREATE INDEX IX_cases_active ON dbo.scam_cases(is_active, risk_score DESC);
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_analyses_created' AND object_id = OBJECT_ID('dbo.analyses'))
     CREATE INDEX IX_analyses_created ON dbo.analyses(created_at DESC);
 

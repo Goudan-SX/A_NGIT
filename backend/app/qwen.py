@@ -134,6 +134,41 @@ def analyze_text(text: str) -> dict[str, Any]:
     return data
 
 
+def review_text(text: str, case: dict[str, Any]) -> dict[str, Any]:
+    case_brief = {
+        "title": case.get("title"),
+        "category": case.get("category"),
+        "content": str(case.get("content", ""))[:2000],
+        "risk_score": case.get("risk_score"),
+        "scam_type": case.get("scam_type"),
+        "summary": case.get("summary"),
+    }
+    prompt = (
+        "你是反诈复核员。系统在数据库中命中了一个相似案例，请复核用户文本是否与该案例一致，"
+        "并给出最终风险判断。只输出 JSON："
+        "{\"confirmed\":true或false,\"confidence\":0到100,\"risk_score\":0到100,"
+        "\"scam_type\":\"\",\"summary\":\"\",\"signals\":[{\"label\":\"\","
+        "\"dimension\":\"script|financial|info|channel|identity\",\"weight\":0,"
+        "\"evidence\":\"\"}],\"suggestions\":[]}。"
+    )
+    payload = {
+        "model": config.QWEN_TEXT_MODEL,
+        "temperature": 0.1,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {
+                "role": "user",
+                "content": "【数据库案例】" + json.dumps(case_brief, ensure_ascii=False)
+                + "\n【用户文本】" + text[:12000],
+            },
+        ],
+    }
+    data = _extract_json(_post(payload))
+    if not data:
+        raise QwenError("Qwen 复核结果不是有效 JSON")
+    return data
+
+
 def analyze_image(image_bytes: bytes, content_type: str) -> dict[str, Any]:
     data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {

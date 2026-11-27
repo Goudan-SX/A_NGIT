@@ -105,6 +105,47 @@ def analyze_text(text: str) -> dict[str, Any]:
     return data
 
 
+REVIEW_PROMPT = """你是反诈复核员。系统在数据库中命中了一个相似案例，请复核用户文本是否与该案例一致，并给出最终风险判断。
+只输出 JSON，不要输出 Markdown，结构如下：
+{
+  "confirmed": true或false,
+  "confidence": 0到100的整数,
+  "risk_score": 0到100的整数,
+  "scam_type": "诈骗类型",
+  "summary": "不超过100字的复核结论",
+  "signals": [{"label": "风险点", "dimension": "script|financial|info|channel|identity", "weight": 0到30, "evidence": "原文片段"}],
+  "suggestions": ["处置建议"]
+}
+如果用户文本与案例一致，confirmed=true；如果只是相似但风险较低，confirmed=false 并给出较低评分。"""
+
+
+def review_text(text: str, case: dict[str, Any]) -> dict[str, Any]:
+    case_brief = {
+        "title": case.get("title"),
+        "category": case.get("category"),
+        "content": str(case.get("content", ""))[:2000],
+        "risk_score": case.get("risk_score"),
+        "scam_type": case.get("scam_type"),
+        "summary": case.get("summary"),
+    }
+    payload = {
+        "model": config.DEEPSEEK_MODEL,
+        "temperature": 0.1,
+        "messages": [
+            {"role": "system", "content": REVIEW_PROMPT},
+            {
+                "role": "user",
+                "content": "【数据库案例】" + json.dumps(case_brief, ensure_ascii=False)
+                + "\n【用户文本】" + text[:12000],
+            },
+        ],
+    }
+    data = ai_common.extract_json(_post(payload))
+    if not data:
+        raise DeepSeekError("DeepSeek 复核结果不是有效 JSON")
+    return data
+
+
 def analyze_image(image_bytes: bytes, content_type: str) -> dict[str, Any]:
     data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {

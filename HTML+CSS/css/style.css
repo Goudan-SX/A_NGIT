@@ -2109,6 +2109,41 @@ svg {
   display: none;
 }
 
+/* 数据库命中 / AI 分析来源提示 */
+.match-badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--blue-700);
+  background-color: var(--blue-50);
+  border: 1px solid var(--blue-100);
+  border-radius: var(--radius-md);
+}
+
+.match-badge__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  background-color: currentColor;
+  border-radius: 50%;
+}
+
+.match-badge--hit {
+  color: var(--green-600);
+  background-color: var(--green-50);
+  border-color: rgba(22, 163, 74, 0.18);
+}
+
+.match-badge--ai {
+  color: var(--blue-700);
+  background-color: var(--blue-50);
+  border-color: var(--blue-100);
+}
+
 /* 后续操作区 */
 .action-block {
   display: flex;

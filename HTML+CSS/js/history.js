@@ -186,6 +186,12 @@
       '<div class="detail-item"><div class="detail-item__label">检测来源</div><div class="detail-item__value">' + escapeHtml(sourceLabel(analysis.source)) + '</div></div>' +
       '<div class="detail-item"><div class="detail-item__label">检测时间</div><div class="detail-item__value">' + escapeHtml(API.formatTime(analysis.created_at)) + '</div></div>' +
       '<div class="detail-item"><div class="detail-item__label">引擎</div><div class="detail-item__value">' + escapeHtml((analysis.engine && analysis.engine.name) || '规则引擎') + '</div></div>' +
+      (analysis.match ? '<div class="detail-item"><div class="detail-item__label">库匹配</div><div class="detail-item__value">' +
+        (analysis.match.hit
+          ? '命中 #' + analysis.match.case_id + ' · ' + Math.round((analysis.match.similarity || 0) * 100) + '% · ' +
+            (analysis.match.reviewed_by_ai ? 'AI 已复核' : 'AI 未复核')
+          : '未命中' + (analysis.match.stored_as_case ? ' · 已收录' : '')) +
+        '</div></div>' : '') +
       '</div>' +
       '<section class="detail-section"><h3 class="detail-section__title">结论摘要</h3><p class="detail-text">' + escapeHtml(analysis.summary || '') + '</p></section>' +
       '<section class="detail-section"><h3 class="detail-section__title">原始内容</h3><p class="detail-text">' + escapeHtml(analysis.input_text || '（无文本内容）') + '</p></section>' +

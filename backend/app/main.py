@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import io
 import json
@@ -25,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from . import ai_common, analyzer, config, db, deepseek, ocr, qwen, repository
+from . import ai_common, analyzer, case_matcher, config, db, deepseek, ocr, qwen, repository
 
 STARTED_AT = time.time()
 
@@ -34,7 +35,13 @@ STARTED_AT = time.time()
 async def lifespan(_: FastAPI):
     try:
         db.ensure_database()
-        repository.add_log(level="success", event="system", message="反诈卫士服务启动，数据库连接成功")
+        created = case_matcher.seed_cases()
+        repository.add_log(
+            level="success",
+            event="system",
+            message=f"反诈卫士服务启动，数据库连接成功；案例库共 {case_matcher.count_cases()} 条（新增种子 {created} 条）",
+            meta={"cases": case_matcher.count_cases(), "seeded": created},
+        )
     except Exception as exc:  # noqa: BLE001 - 启动阶段尽量给出明确提示
         print(f"[反诈卫士] 数据库初始化失败：{exc}")
     yield
@@ -187,6 +194,7 @@ def health() -> dict[str, Any]:
         "uptime_seconds": int(time.time() - STARTED_AT),
         "database": database,
         "ai": _ai_status(),
+        "cases": case_matcher.count_cases(),
     }
 
 
@@ -196,6 +204,7 @@ def api_config() -> dict[str, Any]:
         "app": config.APP_NAME,
         "version": config.APP_VERSION,
         "ai": _ai_status(),
+        "cases": case_matcher.count_cases(),
         "limits": {
             "max_image_mb": config.MAX_IMAGE_MB,
             "max_audio_mb": config.MAX_AUDIO_MB,
@@ -269,11 +278,69 @@ def _enhance_text_with_ai(result: dict[str, Any], text: str, errors: list[str] |
     return result
 
 
+def _review_case_with_ai(text: str, case: dict[str, Any],
+                         errors: list[str] | None = None) -> tuple[str | None, dict[str, Any] | None]:
+    if deepseek.is_enabled():
+        try:
+            return "deepseek", deepseek.review_text(text, case)
+        except Exception as exc:  # noqa: BLE001
+            if errors is not None:
+                errors.append(f"DeepSeek 复核失败：{str(exc)[:160]}")
+    if qwen.is_enabled():
+        try:
+            return "qwen", qwen.review_text(text, case)
+        except Exception as exc:  # noqa: BLE001
+            if errors is not None:
+                errors.append(f"Qwen 复核失败：{str(exc)[:160]}")
+    return None, None
+
+
+def _analyze_text_with_case(text: str, errors: list[str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """先查案例库；命中则复用案例并做 AI 二次复核，未命中才走 AI 分析。"""
+    match = case_matcher.lookup(text)
+    if match.get("hit"):
+        case = match["case"]
+        result = case_matcher.result_from_case(case, match)
+        provider, review = _review_case_with_ai(text, case, errors)
+        if review:
+            result = _apply_ai(result, review, source="database", provider=provider)
+            label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
+            result["engine"] = {
+                "name": f"database-{provider}-review",
+                "ai": True,
+                "provider": provider,
+                "note": f"数据库案例命中 + {label} 二次复核",
+            }
+            result["match"]["reviewed_by_ai"] = True
+            result["match"]["review_provider"] = provider
+            result["match"]["review_confidence"] = review.get("confidence")
+            result["match"]["review_verdict"] = "confirmed" if review.get("confirmed") else "not_confirmed"
+            if not review.get("confirmed"):
+                result["match"]["review_note"] = "AI 复核认为与案例不完全一致，建议结合原文判断"
+        else:
+            result["engine"] = {
+                "name": "database-match",
+                "ai": False,
+                "provider": "database",
+                "note": "数据库案例命中；AI 复核不可用，已直接复用案例结果",
+            }
+        return result, match
+
+    result = analyzer.analyze_text(text)
+    result = _enhance_text_with_ai(result, text, errors)
+    result["match"] = {
+        "hit": False,
+        "nearest": match.get("nearest"),
+        "reviewed_by_ai": False,
+        "review_provider": None,
+    }
+    return result, match
+
+
 @app.post("/api/analyze/text")
 def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
     started = time.perf_counter()
-    result = analyzer.analyze_text(payload.text)
-    result = _enhance_text_with_ai(result, payload.text)
+    result, match = _analyze_text_with_case(payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     analysis_id = None
     if payload.save and payload.text.strip():
@@ -287,11 +354,24 @@ def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
                 duration_ms=duration,
             )
             result["id"] = analysis_id
+            added = False
+            if not match.get("hit"):
+                added = case_matcher.add_case_from_result(payload.text, result)
+                if added:
+                    result["match"]["stored_as_case"] = True
+            matched = "数据库命中" if match.get("hit") else "数据库未命中"
             _log_safe(
                 level="warning" if result["risk_level"] in {"high", "critical"} else "info",
                 event="analyze",
-                message=f"文本检测完成：{result['risk_label']} {result['risk_score']} 分",
-                meta={"analysis_id": analysis_id, "risk_score": result["risk_score"], "source": "text"},
+                message=f"文本检测完成：{result['risk_label']} {result['risk_score']} 分（{matched}{'，已收录新案例' if added else ''}）",
+                meta={
+                    "analysis_id": analysis_id,
+                    "risk_score": result["risk_score"],
+                    "source": "text",
+                    "match": match.get("hit", False),
+                    "case_id": (match.get("case") or {}).get("id"),
+                    "stored_as_case": added,
+                },
                 duration_ms=duration,
             )
         except Exception as exc:  # noqa: BLE001
@@ -410,8 +490,8 @@ async def analyze_multimodal(
     text = (text or "")[:20000]
     note = (note or "")[:500]
     errors: list[str] = []
-    base = analyzer.analyze_text(text)
-    base = _enhance_text_with_ai(base, text, errors)
+    base, text_match = _analyze_text_with_case(text, errors)
+    text_case_result = copy.deepcopy(base)
     parts: list[dict[str, Any]] = []
     media_rows: list[dict[str, Any]] = []
 
@@ -578,14 +658,24 @@ async def analyze_multimodal(
                 duration_ms=duration,
             )
             combined["id"] = analysis_id
+            added = False
+            if text.strip() and not text_match.get("hit"):
+                added = case_matcher.add_case_from_result(text, text_case_result)
+                if added:
+                    combined.setdefault("match", {})["stored_as_case"] = True
             _log_safe(
                 level="warning" if combined["risk_level"] in {"high", "critical"} else "info",
                 event="analyze",
-                message=f"多模态检测完成：{combined['risk_label']} {combined['risk_score']} 分（{source}）",
+                message=f"多模态检测完成：{combined['risk_label']} {combined['risk_score']} 分（{source}，"
+                        f"{'数据库命中' if text_match.get('hit') else '数据库未命中'}"
+                        f"{'，已收录新案例' if added else ''}）",
                 meta={
                     "analysis_id": analysis_id,
                     "risk_score": combined["risk_score"],
                     "source": source,
+                    "match": text_match.get("hit", False),
+                    "case_id": (text_match.get("case") or {}).get("id"),
+                    "stored_as_case": added,
                     "files": [row["original_name"] for row in media_rows],
                 },
                 duration_ms=duration,
