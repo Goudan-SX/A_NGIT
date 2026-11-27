@@ -152,7 +152,7 @@ A_NGIT/
 
 ## 四、快速启动
 
-> 下载发布包的用户请直接运行 **install.bat**，详见 [README_安装说明.md](README_安装说明.md)。
+> 发布包分两款：**Guardian-AI_Server**（本机部署/管理员，运行 install.bat）和 **Guardian-AI_Client**（普通用户，运行 Client-Setup.bat，只连中心服务器）。详见 [README_安装说明.md](README_安装说明.md) 和 [README_客户端安装说明.md](README_客户端安装说明.md)。
 
 ### 1. 安装依赖
 

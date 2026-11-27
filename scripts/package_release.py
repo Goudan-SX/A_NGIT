@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Build a clean Guardian-AI release ZIP (no secrets, runtime data or local DB)."""
+"""Build Guardian-AI server and client release ZIPs (no secrets/runtime data)."""
 from __future__ import annotations
 
 import hashlib
@@ -20,6 +20,13 @@ DATA_ALLOW = {
     "backend/data/uploads/.gitkeep",
     "backend/data/thumbnails/.gitkeep",
 }
+CLIENT_FILES = [
+    "Client-Setup.bat",
+    "scripts/client_setup.ps1",
+    "backend/desktop/guardian.ico",
+    "README_客户端安装说明.md",
+]
+SERVER_EXCLUDE = {"Client-Setup.bat", "scripts/client_setup.ps1", "README_客户端安装说明.md"}
 
 
 def version() -> str:
@@ -53,21 +60,35 @@ def include(path: Path) -> bool:
     return True
 
 
-def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M")
-    name = f"Guardian-AI_v{version()}_{stamp}.zip"
-    target = OUT_DIR / name
-    files = sorted(p for p in ROOT.rglob("*") if p.is_file() and include(p))
+def build(files: list[Path], zip_name: str, prefix: str) -> Path:
+    target = OUT_DIR / zip_name
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for path in files:
             rel = path.relative_to(ROOT).as_posix()
-            zf.write(path, f"Guardian-AI/{rel}")
+            zf.write(path, f"{prefix}/{rel}")
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
-    (OUT_DIR / (name + ".sha256.txt")).write_text(f"{digest}  {name}\n", encoding="utf-8")
+    (OUT_DIR / (zip_name + ".sha256.txt")).write_text(f"{digest}  {zip_name}\n", encoding="utf-8")
     print(f"已生成：{target}")
-    print(f"文件数：{len(files)}  大小：{target.stat().st_size / 1024 / 1024:.1f} MB")
+    print(f"文件数：{len(files)}  大小：{target.stat().st_size / 1024 / 1024:.2f} MB")
     print(f"SHA256：{digest}")
+    return target
+
+
+def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    ver = version()
+
+    server_files = sorted(
+        p for p in ROOT.rglob("*")
+        if p.is_file() and include(p)
+        and p.relative_to(ROOT).as_posix() not in SERVER_EXCLUDE
+    )
+    client_files = [ROOT / rel for rel in CLIENT_FILES if (ROOT / rel).is_file()]
+
+    build(server_files, f"Guardian-AI_Server_v{ver}_{stamp}.zip", "Guardian-AI-Server")
+    print("")
+    build(client_files, f"Guardian-AI_Client_v{ver}_{stamp}.zip", "Guardian-AI-Client")
 
 
 if __name__ == "__main__":
