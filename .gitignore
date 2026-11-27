@@ -50,3 +50,4 @@ backend/data/backend.log
 backend/data/launcher.log
 backend/data/overlay_state.json
 backend/data/overlay_state.tmp
+backend/data/backend.pid

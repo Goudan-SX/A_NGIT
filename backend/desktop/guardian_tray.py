@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -34,6 +35,7 @@ from backend.desktop import alert_overlay, single_instance  # noqa: E402
 CONFIG_PATH = config.DATA_DIR / "tray_config.json"
 QUEUE_PATH = config.DATA_DIR / "tray_alerts.db"
 PID_PATH = config.DATA_DIR / "tray.pid"
+BACKEND_PID = config.DATA_DIR / "backend.pid"
 API_BASE = "http://127.0.0.1:8000"
 POLL_SECONDS = 1.5
 ALERT_COOLDOWN = 600
@@ -360,9 +362,39 @@ def choose_from_tray(icon: Icon, item: MenuItem) -> None:
     threading.Thread(target=choose_windows, kwargs={"first_run": False}, daemon=True).start()
 
 
+def stop_backend() -> None:
+    try:
+        pid = 0
+        try:
+            pid = int(BACKEND_PID.read_text(encoding="utf-8").strip())
+        except Exception:  # noqa: BLE001
+            try:
+                request = Request(API_BASE + "/api/health", headers={"Accept": "application/json"})
+                with urlopen(request, timeout=2) as response:
+                    pid = int(json.loads(response.read().decode("utf-8")).get("pid") or 0)
+            except Exception:  # noqa: BLE001
+                pid = 0
+        if pid and pid != os.getpid():
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=0x08000000,
+                timeout=5,
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        try:
+            BACKEND_PID.unlink()
+        except OSError:
+            pass
+
+
 def quit_app(icon: Icon, item: MenuItem) -> None:
     _stop.set()
     alert_overlay.shutdown()
+    stop_backend()
     icon.stop()
 
 

@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from backend.desktop import single_instance  # noqa: E402
 
 LOG_PATH = ROOT / "backend" / "data" / "launcher.log"
+BACKEND_PID = ROOT / "backend" / "data" / "backend.pid"
 PYTHONW = Path(sys.executable).with_name("pythonw.exe")
 PYTHON = Path(sys.executable)
 
@@ -49,7 +50,13 @@ def elevate() -> None:
 def health() -> bool:
     try:
         with urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=2) as response:
-            return response.status == 200
+            if response.status != 200:
+                return False
+            data = json.loads(response.read().decode("utf-8"))
+            pid = int(data.get("pid") or 0)
+            if pid > 0:
+                BACKEND_PID.write_text(str(pid), encoding="utf-8")
+            return True
     except Exception:  # noqa: BLE001
         return False
 
@@ -66,13 +73,14 @@ def start_backend() -> bool:
         return True
     log("启动后端")
     with (ROOT / "backend" / "data" / "backend.log").open("ab") as output:
-        subprocess.Popen(
+        process = subprocess.Popen(
             [str(PYTHONW), "-m", "uvicorn", "backend.app.main:app", "--host", "127.0.0.1", "--port", "8000"],
             cwd=str(ROOT),
             stdout=output,
             stderr=subprocess.STDOUT,
             **hidden_kwargs(),
         )
+        BACKEND_PID.write_text(str(process.pid), encoding="utf-8")
     for _ in range(40):
         if health():
             return True

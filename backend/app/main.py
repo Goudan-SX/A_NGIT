@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 import mimetypes
+import os
 import re
 import time
 import uuid
@@ -293,6 +294,7 @@ def health() -> dict[str, Any]:
         database = {"ok": False, "error": str(exc)}
     return {
         "ok": True,
+        "pid": os.getpid(),
         "app": config.APP_NAME,
         "version": config.APP_VERSION,
         "uptime_seconds": int(time.time() - STARTED_AT),
