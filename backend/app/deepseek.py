@@ -93,12 +93,18 @@ LAYOUT_PROMPT = """你是聊天窗口布局分析器。识别这张聊天软件�
 坐标使用 0 到 1 的相对比例，相对于整张图片；左上角为 (0,0)。
 {
   "contact": {"x": 0.0, "y": 0.0, "w": 0.0, "h": 0.0},
+  "contact_text": "聊天区顶部显示的对方名称/ID，不要取窗口标题或当前登录用户昵称",
   "chat": {"x": 0.0, "y": 0.0, "w": 0.0, "h": 0.0},
   "confidence": 0到1
 }
 contact = 聊天内容区左上角的对方名称/ID 区域；
 chat = 当前聊天消息主区域，必须排除左侧会话列表、搜索栏、顶部工具栏、底部输入框和发送按钮。
 如果无法判断，confidence 返回 0。"""
+
+
+CONTACT_PROMPT = """只读取这张聊天窗口顶部区域中的“对方名称/ID”文字。
+不要输出窗口标题、当前登录用户昵称、状态点、时间或图标。
+只输出对方名称/ID 原文；如果是 ~ 就输出 ~；无法识别则输出空字符串。"""
 
 
 def analyze_text(text: str) -> dict[str, Any]:
@@ -232,3 +238,20 @@ def analyze_chat_layout(image_bytes: bytes, content_type: str = "image/png") -> 
     if not data:
         raise DeepSeekError("DeepSeek 布局识别结果不是有效 JSON")
     return data
+
+def read_contact_name(image_bytes: bytes, content_type: str = "image/png") -> str:
+    data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+    payload = {
+        "model": config.DEEPSEEK_VISION_MODEL,
+        "temperature": 0.0,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": CONTACT_PROMPT},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ],
+    }
+    return (_post(payload) or "").strip().strip('"').strip()[:120]

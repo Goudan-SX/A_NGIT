@@ -6,6 +6,7 @@ Windows.Media.Ocr（无需联网、无需额外安装）提取截图中的文字
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -71,3 +72,46 @@ def extract_text(image_path: str | Path, timeout: int = 45) -> str:
     if not output or output == "__NO_ENGINE__":
         return ""
     return _normalize(output)
+
+def extract_lines(image_path: str | Path, timeout: int = 30) -> list[dict]:
+    """返回 OCR 行及包围盒，供区分左右两侧消息。"""
+    if not is_available():
+        return []
+    path = str(Path(image_path).resolve())
+    command = [
+        "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", str(SCRIPT_PATH), "-Path", path, "-Json",
+    ]
+    try:
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0
+        result = subprocess.run(
+            command, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=timeout, creationflags=0x08000000,
+            startupinfo=startupinfo,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        data = json.loads((result.stdout or "").strip() or "[]")
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, dict):
+        data = [data]
+    lines = []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict):
+            continue
+        text = _normalize(str(item.get("text", "")))
+        if text:
+            lines.append({
+                "text": text,
+                "x": int(item.get("x", 0)),
+                "y": int(item.get("y", 0)),
+                "w": int(item.get("w", 0)),
+                "h": int(item.get("h", 0)),
+            })
+    return lines

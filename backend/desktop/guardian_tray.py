@@ -252,6 +252,34 @@ def detect_chat_layout(rect: tuple[int, int, int, int], window_title: str) -> di
         contact = layout.get("contact") or {}
         if not all(isinstance(chat.get(k), (int, float)) for k in ("x", "y", "w", "h")):
             return None
+        if not layout.get("contact_text") and contact:
+            try:
+                cw, ch = image.size
+                cx = int(float(contact.get("x", 0)) * cw)
+                cy = int(float(contact.get("y", 0)) * ch)
+                cw_box = int(float(contact.get("w", 0)) * cw)
+                ch_box = int(float(contact.get("h", 0)) * ch)
+                # 模型框可能只框到状态点，向四周扩一圈再识别文字。
+                box = (max(0, cx - 25), max(0, cy - 15),
+                       min(cw, cx + max(200, cw_box + 160)), min(ch, cy + max(70, ch_box + 45)))
+                if box[2] > box[0] and box[3] > box[1]:
+                    crop = image.crop(box)
+                    buf = BytesIO()
+                    crop.save(buf, "PNG")
+                    contact_payload = json.dumps({
+                        "image_base64": base64.b64encode(buf.getvalue()).decode("ascii"),
+                        "mime": "image/png",
+                    }).encode("utf-8")
+                    contact_req = Request(
+                        API_BASE + "/api/monitor/contact",
+                        data=contact_payload,
+                        headers={"Content-Type": "application/json", "X-Guardian-Token": security.get_local_token()},
+                        method="POST",
+                    )
+                    with urlopen(contact_req, timeout=30) as contact_resp:
+                        layout["contact_text"] = str(json.loads(contact_resp.read().decode("utf-8")).get("text") or "").strip()
+            except Exception:  # noqa: BLE001
+                pass
         _LAYOUT_CACHE.clear()
         _LAYOUT_CACHE[key] = layout
         return layout
@@ -298,8 +326,31 @@ def _ocr_region(crop: tuple[int, int, int, int], mask_overlay: bool = False) -> 
             pass
 
 
+def _ocr_region_lines(crop: tuple[int, int, int, int], mask_overlay: bool = False) -> list[dict]:
+    from PIL import ImageGrab, ImageDraw
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
+        path = handle.name
+    try:
+        image = ImageGrab.grab(bbox=crop)
+        if mask_overlay:
+            screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+            screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+            box = (screen_w - 454 - crop[0], screen_h - 206 - crop[1],
+                   screen_w - 24 - crop[0], screen_h - 56 - crop[1])
+            ImageDraw.Draw(image).rectangle(box, fill=(255, 255, 255))
+        image.save(path, "PNG")
+        return ocr.extract_lines(path, timeout=30)
+    except Exception:  # noqa: BLE001
+        return []
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tuple[str, list[str]] | None:
-    """WeChat 等自绘窗口 UIA 读不到文字时，只 OCR 聊天主区域。"""
+    """统一视觉采集：AI 定位范围，只取对方消息，过滤自己的输出。"""
     global _last_ocr_at
     now = time.time()
     if now - _last_ocr_at < 10:
@@ -313,32 +364,33 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
         header_box = (left + int((right - left) * 0.25), top + 30, right, top + 125)
     if not chat_box:
         chat_box = (left + int((right - left) * 0.25), top + 115, right, bottom)
-    header_text = _ocr_region(header_box)
-    body_text = _ocr_region(chat_box, mask_overlay=True)
-    header_lines = [line.strip() for line in (header_text or "").splitlines() if line.strip()]
-    contact = window_title or "未知用户"
-    for line in header_lines:
-        cleaned = line.strip(" ·|｜")
-        if len(cleaned) <= 60 and cleaned not in {"微信", "WeChat", "QQ", "TIM", "搜索", "发送"} and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
-            contact = cleaned[:60]
-            break
-    # QQ 的当前联系人显示在窗口标题栏；微信标题栏只是“微信”，需跳过。
-    title_text = _ocr_region((left + 70, top, min(right, left + 420), top + 52))
-    for line in (title_text or "").splitlines():
-        cleaned = re.sub(r"^[·．\s]+", "", line).strip(" ·|｜")
-        if len(cleaned) <= 60 and cleaned not in {"微信", "WeChat", "QQ", "TIM", "搜索", "发送"} and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
-            contact = cleaned[:60]
-            break
-    if contact in GENERIC_CONTACTS:
+
+    contact = str((layout or {}).get("contact_text") or "").strip()[:60]
+    if not contact or contact in GENERIC_CONTACTS:
+        header_text = _ocr_region(header_box)
+        for line in (header_text or "").splitlines():
+            cleaned = line.strip(" ·|｜")
+            if len(cleaned) <= 60 and cleaned not in GENERIC_CONTACTS and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
+                contact = cleaned[:60]
+                break
+    if not contact or contact in GENERIC_CONTACTS:
         return None
-    lines = [line.strip() for line in (body_text or "").splitlines() if line.strip()]
-    if lines and len(lines[0]) <= 60 and lines[0] == contact:
-        lines = lines[1:]
+
+    rows = _ocr_region_lines(chat_box, mask_overlay=True)
+    if not rows:
+        return None
+    width = max(1, chat_box[2] - chat_box[0])
     messages = []
-    for value in lines:
+    for row in rows:
+        value = str(row.get("text") or "").strip()
         value = re.sub(r"^\d{1,2}:\d{2}\s*", "", value).strip()
-        if value and value != contact and not _is_chat_noise(value):
-            messages.append(value[:500])
+        if not value or value == contact or _is_chat_noise(value):
+            continue
+        # 对方消息在左侧；右侧头像/气泡属于当前用户，不参与检测。
+        center = int(row.get("x", 0)) + int(row.get("w", 0)) / 2
+        if center > width * 0.62:
+            continue
+        messages.append(value[:500])
     if not messages:
         return None
     return contact, messages[-20:]

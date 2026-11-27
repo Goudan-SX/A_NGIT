@@ -145,6 +145,11 @@ class MonitorAnalyzeRequest(BaseModel):
 class MonitorLayoutRequest(BaseModel):
     image_base64: str = Field(min_length=16, max_length=12_000_000)
     mime: str = Field(default="image/png", max_length=40)
+
+
+class MonitorContactRequest(BaseModel):
+    image_base64: str = Field(min_length=16, max_length=12_000_000)
+    mime: str = Field(default="image/png", max_length=40)
     fast: bool = False
 
 
@@ -622,6 +627,18 @@ def _refine_monitor(payload: MonitorAnalyzeRequest) -> None:
             )
     except Exception:  # noqa: BLE001
         pass
+
+
+@app.post("/api/monitor/contact")
+def api_monitor_contact(payload: MonitorContactRequest) -> dict[str, Any]:
+    if not deepseek.is_enabled():
+        raise HTTPException(status_code=503, detail="视觉联系人识别暂不可用")
+    try:
+        image = base64.b64decode(payload.image_base64, validate=True)
+        text = deepseek.read_contact_name(image, payload.mime or "image/png")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"联系人识别失败：{str(exc)[:160]}") from exc
+    return {"ok": True, "text": text}
 
 
 @app.post("/api/monitor/layout")

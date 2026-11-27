@@ -1,4 +1,4 @@
-param([string]$Path)
+param([string]$Path, [switch]$Json)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -30,4 +30,18 @@ if ($null -eq $engine) {
 }
 
 $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-$result.Lines | ForEach-Object { $_.Text }
+if ($Json) {
+  $items = @()
+  foreach ($line in $result.Lines) {
+    $words = @($line.Words)
+    if ($words.Count -eq 0) { continue }
+    $x1 = ($words | ForEach-Object { $_.BoundingRect.X } | Measure-Object -Minimum).Minimum
+    $y1 = ($words | ForEach-Object { $_.BoundingRect.Y } | Measure-Object -Minimum).Minimum
+    $x2 = ($words | ForEach-Object { $_.BoundingRect.X + $_.BoundingRect.Width } | Measure-Object -Maximum).Maximum
+    $y2 = ($words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height } | Measure-Object -Maximum).Maximum
+    $items += [pscustomobject]@{ text = $line.Text; x = [int]$x1; y = [int]$y1; w = [int]($x2 - $x1); h = [int]($y2 - $y1) }
+  }
+  $items | ConvertTo-Json -Compress -Depth 5
+} else {
+  $result.Lines | ForEach-Object { $_.Text }
+}
