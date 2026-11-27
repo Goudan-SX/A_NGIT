@@ -16,6 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
+from backend.desktop import single_instance  # noqa: E402
+
 LOG_PATH = ROOT / "backend" / "data" / "launcher.log"
 PYTHONW = Path(sys.executable).with_name("pythonw.exe")
 PYTHON = Path(sys.executable)
@@ -103,13 +105,25 @@ def configure_tray() -> None:
 
 
 def tray_running() -> bool:
+    if single_instance.exists():
+        return True
     pid_path = ROOT / "backend" / "data" / "tray.pid"
     try:
         pid = int(pid_path.read_text(encoding="utf-8").strip())
         os.kill(pid, 0)
         return True
+    except PermissionError:
+        # 托盘以管理员运行，普通权限探测会拒绝；视为仍在运行。
+        return True
     except Exception:  # noqa: BLE001
         return False
+
+
+def open_page() -> None:
+    try:
+        os.startfile("http://127.0.0.1:8000/")
+    except OSError:
+        pass
 
 
 def start_tray() -> None:
@@ -138,13 +152,22 @@ def notify_result(ok: bool) -> None:
 
 def main() -> None:
     if "--elevated" not in sys.argv and not is_admin():
+        # 已在运行时不请求 UAC，直接打开 Web 前端。
+        if health() and tray_running():
+            open_page()
+            return
         elevate()
         return
     log("管理员权限已确认")
     configure_tray()
+    if health() and tray_running():
+        log("程序已运行，直接打开页面")
+        open_page()
+        return
     ok = start_backend()
     if ok:
         start_tray()
+        open_page()
     log("启动完成" if ok else "启动失败")
     notify_result(ok)
 

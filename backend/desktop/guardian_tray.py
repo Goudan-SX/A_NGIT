@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.app import analyzer, config, ocr, security  # noqa: E402
-from backend.desktop import alert_overlay  # noqa: E402
+from backend.desktop import alert_overlay, single_instance  # noqa: E402
 
 CONFIG_PATH = config.DATA_DIR / "tray_config.json"
 QUEUE_PATH = config.DATA_DIR / "tray_alerts.db"
@@ -45,6 +45,7 @@ _stop = threading.Event()
 _paused = False
 _allowed_titles: list[str] = []
 _icon: Icon | None = None
+_TRAY_MUTEX = None
 
 
 def load_config() -> dict:
@@ -366,7 +367,10 @@ def quit_app(icon: Icon, item: MenuItem) -> None:
 
 
 def main() -> None:
-    global _allowed_titles, _paused, _icon
+    global _allowed_titles, _paused, _icon, _TRAY_MUTEX
+    _TRAY_MUTEX = single_instance.acquire()
+    if _TRAY_MUTEX is None:
+        return
     cfg = load_config()
     if not cfg.get("consent") or not cfg.get("allowed_titles"):
         if not choose_windows(first_run=True):
