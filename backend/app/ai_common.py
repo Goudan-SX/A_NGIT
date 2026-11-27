@@ -58,5 +58,9 @@ def signals_to_evidence(data: dict[str, Any], provider: str = "ai") -> list[dict
             "evidence": str(item.get("evidence", ""))[:600],
             "protective": False,
             "source": provider,
+            "confidence": 0.65,
+            "disclaimer": "推断，非事实",
+            "start": -1,
+            "end": -1,
         })
     return result

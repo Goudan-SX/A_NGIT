@@ -195,7 +195,7 @@
     }
 
     var images = (analysis.images || []).map(function (item) {
-      var url = item.thumb_name ? API.downloadUrl('/thumbnails/' + item.thumb_name) : API.downloadUrl('/uploads/' + item.stored_name);
+      var url = item.thumb_name ? API.downloadUrl('/api/media/thumbnail/' + item.thumb_name) : API.downloadUrl('/api/media/original/' + item.stored_name);
       return '<a class="tag tag--neutral" href="' + url + '" target="_blank" rel="noopener" style="text-decoration:none">' +
         escapeHtml(item.original_name) + ' · ' + (item.risk_score || 0) + '%</a>';
     }).join(' ');

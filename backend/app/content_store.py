@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import db
+from . import analyzer, db
 
 
 def _risk(result: dict[str, Any] | None) -> tuple[int | None, str | None]:
@@ -21,6 +21,7 @@ def record_staging(*, user_key: str, modality: str, raw_text: str | None = None,
                    transcript: str | None = None, analysis_id: int | None = None,
                    result: dict[str, Any] | None = None, status: str = "analyzed") -> int:
     risk_score, risk_level = _risk(result)
+    safe_text = analyzer.mask_text(raw_text, result) if raw_text else raw_text
     return db.execute(
         """
         INSERT INTO dbo.staging_contents
@@ -33,7 +34,7 @@ def record_staging(*, user_key: str, modality: str, raw_text: str | None = None,
         [
             (user_key or "anonymous")[:64],
             modality,
-            raw_text,
+            safe_text,
             stored_name,
             original_name,
             content_type,

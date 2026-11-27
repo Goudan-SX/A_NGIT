@@ -479,7 +479,7 @@ def _add_pii(bucket: dict[str, dict[str, Any]], pii_type: str, label: str, raw: 
             "source": "text",
         }
     bucket[key]["count"] += 1
-    bucket[key]["positions"].append({"start": start, "end": end})
+    bucket[key]["positions"].append({"start": start, "end": end, "raw_start": start, "raw_end": end})
 
 
 def detect_pii(text: str) -> list[dict[str, Any]]:
@@ -710,6 +710,9 @@ def _signals_payload(evidence: list[dict[str, Any]], scores: dict[str, int],
             "count": sum(item["count"] for item in pii),
             "evidence": "、".join(item["label"] for item in pii),
             "protective": False,
+            "source": "rule",
+            "start": pii[0].get("positions", [{}])[0].get("raw_start", 0),
+            "end": pii[0].get("positions", [{}])[0].get("raw_end", 0),
         })
         votes["信息窃取"] = votes.get("信息窃取", 0) + min(25, pii_weight)
     if links:
@@ -723,6 +726,9 @@ def _signals_payload(evidence: list[dict[str, Any]], scores: dict[str, int],
             "count": len(links),
             "evidence": max_link["url"][:80],
             "protective": False,
+            "source": "rule",
+            "start": max_link.get("start", 0),
+            "end": max_link.get("end", 0),
         })
         scores["channel"] += min(15, round(max_link["risk"] * 0.18))
         votes["钓鱼链接/木马"] = votes.get("钓鱼链接/木马", 0) + max_link["risk"] * 0.2
@@ -771,6 +777,13 @@ def analyze_text(text: str, *, engine_name: str = "guardian-rule-v1") -> dict[st
             snippet = clean[line_start:line_end].strip()
             if len(snippet) > 800:
                 snippet = snippet[:800] + "…"
+            raw_start = raw_text.find(snippet)
+            if raw_start < 0:
+                raw_start = raw_text.find(first[2])
+            raw_end = raw_start + len(snippet) if raw_start >= 0 else -1
+            if raw_start < 0:
+                raw_start = 0
+                raw_end = 0
             evidence.append({
                 "id": sig["id"],
                 "label": sig["label"],
@@ -780,10 +793,13 @@ def analyze_text(text: str, *, engine_name: str = "guardian-rule-v1") -> dict[st
                 "count": count,
                 "evidence": snippet,
                 "protective": protective,
+                "source": "rule",
+                "start": raw_start,
+                "end": raw_end,
             })
 
-    pii = detect_pii(clean) if not empty else []
-    links = analyze_links(clean) if not empty else []
+    pii = detect_pii(raw_text) if not empty else []
+    links = analyze_links(raw_text) if not empty else []
     evidence = _signals_payload(evidence, scores, votes, pii, links)
     if pii:
         for item in pii:
@@ -1005,3 +1021,58 @@ def recompute_level(result: dict[str, Any]) -> dict[str, Any]:
     result["risk_label"] = LEVELS[level]["label"]
     result["risk_hint"] = LEVELS[level]["hint"]
     return result
+
+
+def build_hit_contract(result: dict[str, Any], text: str | None = None) -> dict[str, Any]:
+    """隔离客观命中（hits）与模型主观推断（inferences），并保留原文偏移。"""
+    hits: list[dict[str, Any]] = []
+    inferences: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for signal in result.get("signals", []) or []:
+        label = str(signal.get("label", ""))
+        if not label:
+            continue
+        key = f"{signal.get('source', 'rule')}:{label}:{signal.get('start')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        item = dict(signal)
+        source = str(item.get("source", "rule"))
+        item.setdefault("start", -1)
+        item.setdefault("end", -1)
+        if (not isinstance(item.get("start"), int) or item.get("start") < 0) and text:
+            evidence = str(item.get("evidence", ""))
+            if evidence:
+                pos = text.find(evidence)
+                if pos >= 0:
+                    item["start"] = pos
+                    item["end"] = pos + len(evidence)
+        if source in {"deepseek", "qwen", "ai"}:
+            item["source"] = "ai"
+            item["confidence"] = float(item.get("confidence", 0.65))
+            item["disclaimer"] = "推断，非事实"
+            inferences.append(item)
+        else:
+            item["source"] = "rule"
+            hits.append(item)
+    result["hits"] = hits
+    result["inferences"] = inferences
+    return result
+
+
+def mask_text(text: str, result: dict[str, Any] | None = None) -> str:
+    """按 PII 的原文偏移对文本打码，保留其余内容。"""
+    value = text or ""
+    info = (result or {}).get("pii") or []
+    replacements: list[tuple[int, int, str]] = []
+    for item in info:
+        if item.get("source") == "media":
+            continue
+        for position in item.get("positions", []):
+            start = position.get("raw_start", position.get("start"))
+            end = position.get("raw_end", position.get("end"))
+            if isinstance(start, int) and isinstance(end, int) and 0 <= start < end <= len(value):
+                replacements.append((start, end, item.get("value") or "[已脱敏]"))
+    for start, end, masked in sorted(replacements, reverse=True):
+        value = value[:start] + masked + value[end:]
+    return value

@@ -20,15 +20,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from . import (ai_common, analyzer, case_matcher, config, content_store, db, deepseek,
-               guardian, ocr, qwen, repository, result_cache, transaction_risk)
+from . import (ai_common, ai_policy, analyzer, case_matcher, config, content_store, db, deepseek,
+               guardian, ocr, qwen, repository, result_cache, security, transaction_risk)
 from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
@@ -96,10 +96,23 @@ class ChatRoomManager:
 chat_rooms = ChatRoomManager()
 
 
+@app.middleware("http")
+async def guardian_guard(request, call_next):
+    """本地令牌 + 机器身份策略：API 默认拒绝无令牌请求。"""
+    path = request.url.path
+    if path.startswith("/api/") and path != "/api/health":
+        header_token = request.headers.get("X-Guardian-Token")
+        if not security.is_valid_request(request, header_token):
+            return JSONResponse(status_code=401, content={"detail": "缺少或无效的本地访问令牌"})
+    requested_external = request.headers.get("X-Guardian-External-AI", "true").lower() != "false"
+    ai_policy.set_deepseek_allowed(security.external_ai_allowed(request) and requested_external)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=["http://127.0.0.1:8000"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -549,6 +562,7 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
 def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
     started = time.perf_counter()
     result, match = _analyze_text_with_case(payload.text, skip_ai=payload.fast)
+    result = analyzer.build_hit_contract(result, payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     analysis_id = None
     if payload.save and not payload.fast and payload.text.strip():
@@ -648,7 +662,7 @@ async def _process_image_upload(file: UploadFile, note: str, save: bool) -> dict
     original_name = Path(file.filename or "").name
     ext = Path(original_name).suffix.lower()
     content_type = file.content_type or mimetypes.guess_type(original_name)[0] or ""
-    if not (ext in config.IMAGE_EXTENSIONS or content_type.startswith("image/")):
+    if ext not in config.IMAGE_EXTENSIONS:
         return {"error": f"{original_name}：不是支持的图片格式"}
     try:
         data = await _read_upload(file, config.MAX_IMAGE_MB * 1024 * 1024)
@@ -956,7 +970,7 @@ async def analyze_multimodal(
         original_name = Path(file.filename).name
         ext = Path(original_name).suffix.lower()
         content_type = file.content_type or mimetypes.guess_type(original_name)[0] or ""
-        if ext in config.IMAGE_EXTENSIONS or content_type.startswith("image/"):
+        if ext in config.IMAGE_EXTENSIONS:
             image_upload_files.append(file)
         elif ext in config.AUDIO_EXTENSIONS or content_type.startswith("audio/"):
             audio_upload_files.append(file)
@@ -985,7 +999,6 @@ async def analyze_multimodal(
     image_parts = [item for item in parts if item.get("type") == "image"]
 
     combined = analyzer.merge_modalities(base, parts)
-    before_guardian = int(combined.get("risk_score", 0))
     guardian_text = "\n".join(
         [text, note] + [str(part.get("text", "")) for part in parts if part.get("text")]
     ).strip()
@@ -995,20 +1008,6 @@ async def analyze_multimodal(
     elif text_match.get("nearest"):
         semantic = float(text_match["nearest"].get("similarity") or 0)
     combined = guardian.compute(guardian_text, combined, semantic)
-    if before_guardian > combined["risk_score"]:
-        combined["risk_score"] = before_guardian
-        combined["guardian"]["modality_score"] = before_guardian
-        if combined.get("summary"):
-            combined["summary"] = re.sub(
-                r"综合风险\s*\d+%",
-                f"综合风险 {before_guardian}%",
-                combined["summary"],
-            )
-        level = analyzer._level_for(before_guardian)
-        combined["risk_level"] = level
-        combined["risk_label"] = analyzer.LEVELS[level]["label"]
-        combined["risk_hint"] = analyzer.LEVELS[level]["hint"]
-        combined["guardian"]["score"] = before_guardian
 
     # 多图联合分析：不是简单取单图最高分，而是让模型横向比对多张图片的信息。
     if len(image_parts) >= 2:
@@ -1059,6 +1058,7 @@ async def analyze_multimodal(
             cross_image["summary"] = "未启用视觉模型，已完成多图并行单图分析"
         combined["cross_image"] = cross_image
 
+    combined = analyzer.build_hit_contract(combined, text or note)
     combined["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     combined["modality_errors"] = errors
     source = _source_for(parts, bool(text.strip()))
@@ -1235,38 +1235,73 @@ def api_download_report(report_id: int) -> Response:
 app.mount("/css", StaticFiles(directory=config.FRONTEND_DIR / "css"), name="css")
 app.mount("/js", StaticFiles(directory=config.FRONTEND_DIR / "js"), name="js")
 app.mount("/assets", StaticFiles(directory=config.FRONTEND_DIR / "assets", check_dir=False), name="assets")
-app.mount("/uploads", StaticFiles(directory=config.UPLOAD_DIR), name="uploads")
-app.mount("/thumbnails", StaticFiles(directory=config.THUMB_DIR), name="thumbnails")
+def _safe_media_path(directory, filename: str):
+    name = Path(filename).name
+    path = (directory / name).resolve()
+    if directory.resolve() not in path.parents or not path.is_file():
+        raise HTTPException(status_code=404, detail="媒体文件不存在")
+    return path
+
+
+@app.get("/api/media/thumbnail/{filename}")
+def media_thumbnail(filename: str, _: None = Depends(security.verify_token)):
+    path = _safe_media_path(config.THUMB_DIR, filename)
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=path.name,
+        content_disposition_type="inline",
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"},
+    )
+
+
+@app.get("/api/media/original/{filename}")
+def media_original(filename: str, _: None = Depends(security.verify_token)):
+    path = _safe_media_path(config.UPLOAD_DIR, filename)
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        filename=path.name,
+        content_disposition_type="attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
+
+
+def _page_response(filename: str) -> FileResponse:
+    response = FileResponse(config.FRONTEND_DIR / "html" / filename)
+    security.set_token_cookie(response)
+    return response
 
 
 @app.get("/")
 def index_page() -> FileResponse:
-    return FileResponse(config.FRONTEND_DIR / "html" / "index.html")
+    return _page_response("index.html")
 
 
 @app.get("/index.html")
 def index_page_explicit() -> FileResponse:
-    return FileResponse(config.FRONTEND_DIR / "html" / "index.html")
+    return _page_response("index.html")
 
 
 @app.get("/chat-test.html")
 def chat_test_page() -> FileResponse:
-    return FileResponse(config.FRONTEND_DIR / "html" / "chat-test.html")
+    return _page_response("chat-test.html")
 
 
 @app.get("/chat.html")
 def chat_page() -> FileResponse:
-    return FileResponse(config.FRONTEND_DIR / "html" / "chat.html")
+    return _page_response("chat.html")
 
 
 @app.get("/history.html")
 def history_page() -> FileResponse:
-    return FileResponse(config.FRONTEND_DIR / "html" / "history.html")
+    return _page_response("history.html")
 
 
 @app.get("/logs.html")
 def logs_page() -> FileResponse:
-    return FileResponse(config.FRONTEND_DIR / "html" / "logs.html")
+    return _page_response("logs.html")
 
 
 @app.exception_handler(404)

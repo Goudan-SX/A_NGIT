@@ -280,6 +280,7 @@
     }
     renderKeywords(result.matched_keywords || [], result.signals || []);
     renderEvidence(result.signals || []);
+    renderContract(result);
     renderPii(result.pii || []);
     renderLinks(result.links || []);
     renderSuggestions(result.suggestions || []);
@@ -294,8 +295,122 @@
     setEngine(engineLabel(result), engine.note || '');
   }
 
+
+  function contractHits(result) {
+    if (result && Array.isArray(result.hits)) return result.hits;
+    return ((result && result.signals) || []).filter(function (item) {
+      return String(item.source || 'rule') !== 'ai';
+    });
+  }
+
+  function contractInferences(result) {
+    if (result && Array.isArray(result.inferences)) return result.inferences;
+    return ((result && result.signals) || []).filter(function (item) {
+      return String(item.source || 'rule') === 'ai';
+    });
+  }
+
+  function renderContract(result) {
+    var raw = $('chat-text') ? $('chat-text').value : '';
+    var hits = contractHits(result);
+    var inferences = contractInferences(result);
+    var filter = $('contract-filter') ? $('contract-filter').value : 'all';
+    var hide = $('hide-markers') ? $('hide-markers').checked : false;
+    var spans = [];
+    if (!hide && filter !== 'ai') {
+      hits.forEach(function (item, index) {
+        if (typeof item.start === 'number' && item.end > item.start) {
+          spans.push({ start: item.start, end: item.end, kind: 'rule', index: index, label: item.label || '' });
+        }
+      });
+    }
+    if (!hide && filter !== 'rule') {
+      inferences.forEach(function (item, index) {
+        if (typeof item.start === 'number' && item.end > item.start) {
+          spans.push({ start: item.start, end: item.end, kind: 'ai', index: index, label: item.label || '' });
+        }
+      });
+    }
+    spans.sort(function (a, b) { return a.start - b.start || b.end - a.end; });
+    var container = $('raw-text');
+    if (container) {
+      container.innerHTML = '';
+      var cursor = 0;
+      spans.forEach(function (span) {
+        if (span.start < cursor || span.end > raw.length) return;
+        container.appendChild(document.createTextNode(raw.slice(cursor, span.start)));
+        var mark = document.createElement('mark');
+        mark.className = span.kind === 'ai' ? 'inference-ai' : 'hit-rule';
+        mark.textContent = raw.slice(span.start, span.end);
+        mark.dataset.contractKind = span.kind;
+        mark.dataset.contractIndex = String(span.index);
+        mark.addEventListener('click', function () {
+          var card = document.querySelector('.contract-item[data-contract-kind="' + span.kind + '"][data-contract-index="' + span.index + '"]');
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        container.appendChild(mark);
+        cursor = span.end;
+      });
+      container.appendChild(document.createTextNode(raw.slice(cursor)));
+    }
+    renderContractList(hits, 'hit-list', 'rule', filter);
+    renderContractList(inferences, 'inference-list', 'ai', filter);
+  }
+
+  function renderContractList(items, id, kind, filter) {
+    var list = $(id);
+    if (!list) return;
+    list.innerHTML = '';
+    if (filter !== 'all' && filter !== kind) return;
+    if (!items.length) {
+      var empty = document.createElement('li');
+      empty.className = 'empty-inline';
+      empty.textContent = kind === 'ai' ? '暂无主观推断' : '暂无客观命中';
+      list.appendChild(empty);
+      return;
+    }
+    items.forEach(function (item, index) {
+      var row = document.createElement('li');
+      row.className = 'contract-item' + (kind === 'ai' ? ' contract-item--inference' : '');
+      row.dataset.contractKind = kind;
+      row.dataset.contractIndex = String(index);
+      var title = document.createElement('strong');
+      title.textContent = item.label || '风险特征';
+      var detail = document.createElement('span');
+      detail.textContent = item.evidence || '';
+      row.appendChild(title);
+      row.appendChild(detail);
+      if (kind === 'ai') {
+        var meta = document.createElement('small');
+        meta.textContent = '推断，非事实' + (item.confidence ? ' · 置信度 ' + Math.round(item.confidence * 100) + '%' : '');
+        row.appendChild(meta);
+        if (item.confidence) {
+          var bar = document.createElement('span');
+          bar.className = 'confidence-bar';
+          var fill = document.createElement('i');
+          fill.style.width = Math.round(item.confidence * 100) + '%';
+          bar.appendChild(fill);
+          row.appendChild(bar);
+        }
+      }
+      row.addEventListener('click', function () {
+        var mark = document.querySelector('mark[data-contract-kind="' + kind + '"][data-contract-index="' + index + '"]');
+        if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function bindContractControls() {
+    var filter = $('contract-filter');
+    var hide = $('hide-markers');
+    if (filter) filter.addEventListener('change', function () { renderContract(state.analysis); });
+    if (hide) hide.addEventListener('change', function () { renderContract(state.analysis); });
+  }
+
   function renderEmpty() {
     state.analysis = null;
+    renderContract(null);
     state.analysisId = null;
     state.saved = false;
     setText($('risk-score'), '0');
@@ -333,45 +448,33 @@
     });
   }
 
-  function renderFallback(text) {
-    var sample = text || '';
-    var high = /刷单|垫付|验证码|屏幕共享|冻结/.test(sample);
-    var fallback = {
-      risk_score: high ? 86 : 18,
-      risk_level: high ? 'high' : 'low',
-      risk_label: high ? '高风险' : '低风险',
-      risk_hint: high ? '建议立即停止沟通' : '暂未发现明显风险',
-      scam_type: high ? '刷单返利 + 屏幕共享' : '暂无明确诈骗类型',
-      summary: high
-        ? '离线演示结果：文本命中刷单、垫付、验证码、屏幕共享等高风险话术，请立即停止沟通与转账。'
-        : '离线演示结果：暂未发现明显风险特征，请启动后端服务获得完整研判。',
-      dimensions: [
-        { key: 'script', name: '话术操控', score: high ? 8 : 2, max: 20, desc: '制造紧迫感或高收益承诺' },
-        { key: 'financial', name: '资金诱导', score: high ? 30 : 0, max: 30, desc: '要求转账、垫付、充值' },
-        { key: 'info', name: '信息窃取', score: high ? 25 : 0, max: 25, desc: '索要验证码、密码或屏幕共享' },
-        { key: 'channel', name: '渠道异常', score: high ? 15 : 2, max: 15, desc: '陌生链接、非官方 App' },
-        { key: 'identity', name: '身份伪装', score: high ? 8 : 0, max: 10, desc: '冒充客服、公检法或熟人' }
-      ],
-      matched_keywords: high ? ['刷单返利', '垫付资金', '验证码', '屏幕共享', '账户冻结'] : [],
-      signals: high ? [
-        { label: '刷单返利', dim: 'financial', weight: 18, severity: 'critical', count: 1, evidence: '刷单返利', protective: false },
-        { label: '要求垫付资金', dim: 'financial', weight: 15, severity: 'critical', count: 1, evidence: '先垫付后返还', protective: false },
-        { label: '索要验证码', dim: 'info', weight: 20, severity: 'critical', count: 1, evidence: '把验证码发给我', protective: false },
-        { label: '要求屏幕共享', dim: 'info', weight: 20, severity: 'critical', count: 1, evidence: '开启屏幕共享', protective: false }
-      ] : [],
-      pii: [],
-      links: [],
-      suggestions: high ? [
-        '立即停止与对方沟通，不要转账、不要提供验证码、不要开启屏幕共享。',
-        '通过官方渠道核实身份，必要时拨打 96110 或 110。',
-        '保留聊天记录与转账凭证，尽快举报。'
-      ] : ['请保持警惕，涉及转账、验证码、屏幕共享时务必核实。'],
-      engine: { name: 'offline-demo', ai: false, note: '后端未连接，展示离线演示结果' },
-      modalities: []
-    };
-    state.analysis = fallback;
-    renderAnalysis(fallback);
-    renderMedia();
+  function renderFallback() {
+    // 后端不可用时只展示明确错误态，不伪造分数、命中或证据。
+    state.analysis = null;
+    state.analysisId = null;
+    state.saved = false;
+    setText($('risk-score'), '—');
+    var scoreEl = $('risk-score');
+    if (scoreEl) scoreEl.innerHTML = '—';
+    var ring = $('risk-ring');
+    if (ring) {
+      ring.style.setProperty('--score', 0);
+      ring.classList.remove('risk-ring--medium', 'risk-ring--high', 'risk-ring--critical');
+      ring.classList.add('risk-ring--low');
+    }
+    setText($('risk-level-text'), '检测服务未连接');
+    setText($('risk-title'), '暂时无法完成研判');
+    setText($('risk-desc'), '请先启动本地后端服务，再重新检测。页面不会展示伪造分数或证据。');
+    setText($('chat-stats'), '检测服务离线');
+    hide($('match-badge'));
+    renderContract(null);
+    renderKeywords([], []);
+    renderEvidence([]);
+    renderPii([]);
+    renderLinks([]);
+    renderSuggestions(['启动 backend/run.py 或 run.bat 后重试。']);
+    setEngine('离线', '本地服务未连接');
+    setGuard('检测服务未连接', false);
   }
 
   function renderMatch(match, result) {
@@ -1848,6 +1951,7 @@
     bindRecorder();
     bindActions();
     bindModals();
+    bindContractControls();
     bindDaily();
     bindQuiz();
     renderKnowledge(FALLBACK_KNOWLEDGE);

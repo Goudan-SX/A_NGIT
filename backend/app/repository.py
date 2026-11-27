@@ -6,7 +6,7 @@ import random
 from datetime import datetime
 from typing import Any
 
-from . import db
+from . import analyzer, db
 
 
 def _loads(value: str | None) -> dict[str, Any]:
@@ -152,7 +152,7 @@ def get_analysis(analysis_id: int) -> dict[str, Any] | None:
         "id": row["id"],
         "created_at": row["created_at"],
         "source": row["source"],
-        "input_text": row["input_text"],
+        "input_text": analyzer.mask_text(row["input_text"] or "", result),
         "note": row["note"],
         "is_false_positive": bool(row["is_false_positive"]),
         "feedback_note": row["feedback_note"],

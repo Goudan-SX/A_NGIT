@@ -170,24 +170,41 @@ def lookup(text: str) -> dict[str, Any]:
     norm = normalize(text)
     if len(norm) < 4:
         return {"hit": False, "nearest": None}
-    rows = db.query_all(
+    digest = content_hash(text)
+    exact_row = db.query_one(
         """
-        SELECT id, title, category, content, content_norm, content_hash,
+        SELECT TOP 1 id, title, category, content, content_norm, content_hash,
                risk_score, risk_level, scam_type, summary, result_json,
                review_json, reviewed_at, hit_count
         FROM dbo.text_cases
-        WHERE is_active = 1
-        ORDER BY id
+        WHERE is_active = 1 AND content_hash = ?
+        """,
+        [digest],
+    )
+    if exact_row:
+        case = _row_to_case(exact_row)
+        db.execute("UPDATE dbo.text_cases SET hit_count = hit_count + 1 WHERE id = ?", [case["id"]])
+        return {"hit": True, "exact": True, "similarity": 1.0, "case": case}
+    min_len = max(4, int(len(norm) * 0.55))
+    max_len = max(min_len + 1, int(len(norm) * 1.6))
+    rows = db.query_all(
         """
+        SELECT TOP 300 id, title, category, content, content_norm, content_hash,
+               risk_score, risk_level, scam_type, summary, result_json,
+               review_json, reviewed_at, hit_count
+        FROM dbo.text_cases
+        WHERE is_active = 1 AND LEN(content_norm) BETWEEN ? AND ?
+        ORDER BY id DESC
+        """,
+        [min_len, max_len],
     )
     if not rows:
         return {"hit": False, "nearest": None}
-    digest = content_hash(text)
     best = None
     best_score = 0.0
     best_exact = False
     for row in rows:
-        score = 1.0 if row["content_hash"] == digest else similarity(norm, row["content_norm"])
+        score = similarity(norm, row["content_norm"])
         if score > best_score:
             best = row
             best_score = score
@@ -222,8 +239,8 @@ def _sanitize_for_store(text: str, result: dict[str, Any]) -> str:
         if item.get("source") == "media":
             continue
         for position in item.get("positions", []):
-            start = position.get("start")
-            end = position.get("end")
+            start = position.get("raw_start", position.get("start"))
+            end = position.get("raw_end", position.get("end"))
             if isinstance(start, int) and isinstance(end, int) and 0 <= start < end <= len(value):
                 replacements.append((start, end, item.get("value") or "[已脱敏]"))
     for start, end, masked in sorted(replacements, reverse=True):
@@ -235,6 +252,15 @@ def add_case_from_result(text: str, result: dict[str, Any], source: str = "auto"
     """把未命中过的检测内容收录为案例；重复内容直接跳过。"""
     if len(normalize(text)) < 8:
         return False
+    if int(result.get("risk_score", 0)) < 50:
+        return False
+    if count_cases() >= 500:
+        return False
+    # 自动收录项保留 90 天，避免无限增长。
+    try:
+        db.execute("DELETE FROM dbo.text_cases WHERE source = 'auto' AND created_at < DATEADD(day, -90, SYSDATETIME())")
+    except Exception:  # noqa: BLE001
+        pass
     stored_text = _sanitize_for_store(text, result)
     norm = normalize(stored_text)
     digest = content_hash(stored_text)

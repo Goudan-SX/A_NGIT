@@ -35,7 +35,7 @@ load_dotenv()
 
 APP_NAME = "Guardian-AI API"
 APP_VERSION = "2.0.0"
-HOST = os.getenv("APP_HOST", "0.0.0.0")
+HOST = os.getenv("APP_HOST", "127.0.0.1")
 PORT = int(os.getenv("APP_PORT", "8000"))
 
 # --------------------------------------------------------------------------
@@ -62,6 +62,16 @@ DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").r
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
 DEEPSEEK_VISION_MODEL = os.getenv("DEEPSEEK_VISION_MODEL", "deepseek-flash")
 DEEPSEEK_TIMEOUT = int(os.getenv("DEEPSEEK_TIMEOUT", "90"))
+
+# --------------------------------------------------------------------------
+# 本地安全与机器身份
+# --------------------------------------------------------------------------
+# 本地 API 令牌：优先环境变量；否则写入 backend/data/.local_api_token
+LOCAL_API_TOKEN = os.getenv("LOCAL_API_TOKEN", "").strip()
+# 允许调用外部大模型的机器指纹；为空时外部模型默认关闭，改用基础库/本地规则
+AUTHORIZED_MACHINE_ID = os.getenv("AUTHORIZED_MACHINE_ID", "").strip()
+# 外部 AI 总开关（仍受机器指纹与请求来源限制）
+EXTERNAL_AI_ALLOWED = os.getenv("EXTERNAL_AI_ALLOWED", "yes").lower() in {"1", "yes", "true", "on"}
 DEEPSEEK_ENABLED = bool(DEEPSEEK_API_KEY)
 
 # --------------------------------------------------------------------------

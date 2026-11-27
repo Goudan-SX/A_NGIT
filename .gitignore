@@ -24,6 +24,9 @@ backend/data/thumbnails/*
 # 训练数据集（体积大，从 Kaggle 自行下载）
 backend/data/indian_fraud/
 backend/data/kaggle_indian_fraud.zip
+backend/data/.local_api_token
+backend/data/tray_config.json
+backend/data/tray_alerts.db
 
 # 依赖与缓存
 node_modules/

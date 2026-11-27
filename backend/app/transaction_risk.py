@@ -163,12 +163,18 @@ def predict(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             frame = raw_input_to_frame(payload)
             features = engineer_frame(frame)
-            probability = float(pipeline.predict_proba(features)[0][1])
+            model = pipeline.named_steps.get("model") if hasattr(pipeline, "named_steps") else None
+            classes = list(getattr(model, "classes_", [0, 1]))
+            positive_col = classes.index(1) if 1 in classes else 1
+            probability = float(pipeline.predict_proba(features)[0][positive_col])
             model_available = True
         except Exception:  # noqa: BLE001
             probability = None
 
+    metadata = load_metadata()
+    threshold = float((metadata.get("metrics") or {}).get("threshold") or 0.5)
     model_score = int(round((probability or 0) * 100))
+    threshold_hit = bool(probability is not None and probability >= threshold)
     score = max(rule_score, model_score)
     if score >= 80:
         level, label, hint = "critical", "极高风险", "建议拒绝交易并人工复核"
@@ -179,17 +185,17 @@ def predict(payload: dict[str, Any]) -> dict[str, Any]:
     else:
         level, label, hint = "low", "低风险", "可正常放行，保持监控"
 
-    metadata = load_metadata()
     return {
         "model_available": model_available,
         "fraud_probability": round(probability, 4) if probability is not None else None,
         "fraud_percent": model_score if probability is not None else None,
+        "model_threshold_hit": threshold_hit,
         "rule_score": rule_score,
         "risk_score": score,
         "risk_level": level,
         "risk_label": label,
         "risk_hint": hint,
-        "threshold": (metadata.get("metrics") or {}).get("threshold"),
+        "threshold": threshold,
         "model_name": metadata.get("model_name"),
         "matched_rules": matched,
         "rule_count": len(rules),

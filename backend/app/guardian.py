@@ -143,12 +143,7 @@ def compute(text: str, result: dict[str, Any], semantic_similarity: float = 0.0)
         ],
         "keyword_hits": hits[:20],
     }
-    result["risk_score"] = total
-    result["risk_level"] = level
-    result["risk_label"] = label
-    result["risk_hint"] = hint
-    if result.get("summary"):
-        result["summary"] = re.sub(r"综合风险\s*\d+%", f"综合风险 {total}%", result["summary"])
+    # 评分真源在 analyzer；guardian 只产出可解释分量，不覆盖 risk_score。
     merged = list(result.get("matched_keywords", []))
     for item in hits:
         if item["keyword"] not in merged:

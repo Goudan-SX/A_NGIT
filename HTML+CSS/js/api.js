@@ -27,13 +27,26 @@
     return payload;
   }
 
+  async function request(url, options) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 30000);
+    try {
+      return await fetch(url, Object.assign({ credentials: 'same-origin' }, options, { signal: controller.signal }));
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error('请求超时（30 秒），请稍后重试');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function get(path) {
-    var response = await fetch(buildUrl(path), { headers: { Accept: 'application/json' } });
+    var response = await request(buildUrl(path), { headers: { Accept: 'application/json' } });
     return parseResponse(response);
   }
 
   async function postJson(path, body) {
-    var response = await fetch(buildUrl(path), {
+    var response = await request(buildUrl(path), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body)
@@ -42,7 +55,7 @@
   }
 
   async function postForm(path, formData) {
-    var response = await fetch(buildUrl(path), {
+    var response = await request(buildUrl(path), {
       method: 'POST',
       body: formData,
       headers: { Accept: 'application/json' }
@@ -51,7 +64,7 @@
   }
 
   async function remove(path) {
-    var response = await fetch(buildUrl(path), { method: 'DELETE', headers: { Accept: 'application/json' } });
+    var response = await request(buildUrl(path), { method: 'DELETE', headers: { Accept: 'application/json' } });
     return parseResponse(response);
   }
 

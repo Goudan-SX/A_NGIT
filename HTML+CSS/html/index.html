@@ -195,6 +195,34 @@
             <span id="match-badge-text">等待检测</span>
           </p>
 
+          <section class="analysis-block" aria-labelledby="contract-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="contract-title">原文对照</h3>
+              <div class="contract-tools">
+                <select class="form-select form-select--compact" id="contract-filter" aria-label="筛选标记类型">
+                  <option value="all">全部标记</option>
+                  <option value="rule">客观命中</option>
+                  <option value="ai">主观推断</option>
+                </select>
+                <label class="contract-toggle">
+                  <input type="checkbox" id="hide-markers" />
+                  隐藏标记
+                </label>
+              </div>
+            </div>
+            <div class="raw-text" id="raw-text">检测后在这里显示完整原文与标记。</div>
+            <div class="contract-grid">
+              <div>
+                <h4 class="contract-subtitle">客观命中</h4>
+                <ul class="contract-list" id="hit-list"><li class="empty-inline">暂无客观命中</li></ul>
+              </div>
+              <div>
+                <h4 class="contract-subtitle contract-subtitle--inference">主观推断</h4>
+                <ul class="contract-list" id="inference-list"><li class="empty-inline">暂无主观推断</li></ul>
+              </div>
+            </div>
+          </section>
+
           <section class="action-block" aria-labelledby="actions-title">
             <div class="analysis-block__head">
               <h3 class="analysis-block__title" id="actions-title">后续操作</h3>

@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from . import ai_common, config
+from . import ai_common, ai_policy, config
 
 
 class DeepSeekError(RuntimeError):
@@ -20,7 +20,7 @@ class DeepSeekError(RuntimeError):
 
 
 def is_enabled() -> bool:
-    return bool(config.DEEPSEEK_ENABLED)
+    return bool(config.DEEPSEEK_ENABLED) and ai_policy.deepseek_allowed()
 
 
 def status() -> dict[str, Any]:
@@ -31,7 +31,7 @@ def status() -> dict[str, Any]:
         "model": config.DEEPSEEK_MODEL,
         "vision_model": config.DEEPSEEK_VISION_MODEL,
         "capabilities": ["text", "image"],
-        "note": "已启用 DeepSeek V4.1 Flash（文本 + 视觉）" if is_enabled() else "未配置 DEEPSEEK_API_KEY",
+        "note": ("已启用 DeepSeek V4.1 Flash（文本 + 视觉）" if is_enabled() else ("机器未授权或请求非本机，外部模型已关闭" if config.DEEPSEEK_ENABLED else "未配置 DEEPSEEK_API_KEY")),
     }
 
 
