@@ -20,6 +20,27 @@ _TRANSLATION = str.maketrans(
     "0123456789:,.;!?()[]\"\"''",
 )
 
+# Windows OCR 会把左右结构的汉字误拆成“偏旁 + 部件”两个字符，
+# 这里按常见拆字模式还原。这些偏旁字符（亻/扌）在正常文本中几乎不会
+# 单独出现，因此替换是安全的。映射均符合汉字结构，不会误改正常文本。
+_SPLIT_CHAR_FIX: dict[str, str] = {
+    # 亻（单人旁）被拆
+    "亻尔": "你", "亻门": "们", "亻乍": "作", "亻故": "做",
+    "亻主": "住", "亻十": "什", "亻也": "他", "亻可": "何",
+    "亻立": "位", "亻本": "体", "亻化": "化",
+    # 扌（提手旁）被拆
+    "扌巴": "把", "扌立": "拉", "扌丁": "打", "扌白": "拍",
+    "扌戈": "找", "扌老": "拷", "扌安": "按", "扌召": "招",
+    "扌发": "拨", "扌争": "挣", "扌齐": "挤", "扌卜": "扑",
+}
+
+
+def _fix_split_chars(text: str) -> str:
+    """还原被 Windows OCR 拆成偏旁的左右结构汉字。"""
+    for wrong, right in _SPLIT_CHAR_FIX.items():
+        text = text.replace(wrong, right)
+    return text
+
 
 def is_available() -> bool:
     return sys.platform == "win32" and SCRIPT_PATH.exists()
@@ -32,6 +53,8 @@ def _normalize(text: str) -> str:
     # 去掉汉字之间的空格，保留英文单词与数字之间的空格
     value = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", value)
     value = re.sub(r"\s*([：:，,。.；;！!？?])\s*", r"\1", value)
+    # 还原被 OCR 拆成偏旁的左右结构汉字（在去空格之后，确保“亻 尔”先合并为“亻尔”）
+    value = _fix_split_chars(value)
     return value.strip()
 
 
