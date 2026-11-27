@@ -50,6 +50,9 @@ DB_TRUSTED = os.getenv("DB_TRUSTED", "yes").lower() in {"1", "yes", "true", "on"
 DB_ENCRYPT = os.getenv("DB_ENCRYPT", "no")
 DB_TIMEOUT = int(os.getenv("DB_TIMEOUT", "10"))
 
+# 用户中心独立数据库（共享表 + user_id 租户标识列）
+USER_DB_NAME = os.getenv("USER_DB_NAME", "user")
+
 # --------------------------------------------------------------------------
 # DeepSeek V4.1 Flash（默认优先的文本 + 视觉模型）
 # 官方模型名 deepseek-flash，原生支持 text + image 输入。

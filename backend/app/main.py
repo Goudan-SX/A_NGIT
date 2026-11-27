@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -30,7 +30,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from . import (ai_common, ai_policy, analyzer, case_library, case_matcher, config, content_store, db, deepseek,
-               conversation_store, guardian, monitor_state, ocr, qwen, repository, result_cache, security, transaction_risk)
+               conversation_store, guardian, monitor_state, ocr, qwen, repository, result_cache, runtime_ai,
+               security, transaction_risk, user_db)
 from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
@@ -43,6 +44,7 @@ GENERIC_CONTACT_NAMES = {"", "QQ", "TIM", "微信", "WeChat", "搜索", "发送"
 async def lifespan(_: FastAPI):
     try:
         db.ensure_database()
+        user_db.ensure_database()
         created = case_matcher.seed_cases()
         guardian.ensure_data()
         transaction_risk.ensure_rules()
@@ -167,6 +169,19 @@ class ReportRequest(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
+class AuthRequest(BaseModel):
+    username: str = Field(default="", max_length=254)
+    password: str = Field(default="", max_length=128)
+
+
+class ApiConfigRequest(BaseModel):
+    base_url: str = Field(default="", max_length=500)
+    api_key: str = Field(default="", max_length=500)
+    model: str = Field(default="", max_length=120)
+    vision_model: str = Field(default="", max_length=120)
+    clear: bool = False
+
+
 # --------------------------------------------------------------------------
 # 基础工具
 # --------------------------------------------------------------------------
@@ -244,8 +259,8 @@ def _ai_status() -> dict[str, Any]:
     if deepseek_status["enabled"]:
         return {
             "enabled": True,
-            "provider": "deepseek",
-            "note": "DeepSeek V4.1 Flash（文本 + 视觉）已启用",
+            "provider": deepseek_status.get("provider", "deepseek"),
+            "note": deepseek_status.get("note", "DeepSeek 已启用"),
             "deepseek": deepseek_status,
             "qwen": qwen_status,
         }
@@ -362,6 +377,154 @@ def api_config() -> dict[str, Any]:
         },
     }
 
+
+
+# --------------------------------------------------------------------------
+# 用户中心：邮箱登录 / 自动注册 / 个人信息 / 每用户 OpenAI 兼容 API 配置
+# --------------------------------------------------------------------------
+def _current_user(request: Request) -> dict[str, Any] | None:
+    return user_db.resolve_session(request.cookies.get(user_db.COOKIE_NAME))
+
+
+def _activate_saved_api(user: dict[str, Any]) -> dict[str, Any] | None:
+    """刷新页面时恢复该用户已保存且未标记失败的 API 配置。"""
+    row = user_db.get_user(int(user["user_id"]))
+    if not row:
+        return None
+    cfg = user_db.api_config(row)
+    if not cfg["configured"] or cfg["status"] == "error":
+        runtime_ai.deactivate()
+        return cfg
+    runtime_ai.activate(row)
+    return cfg
+
+
+def _test_saved_api(user: dict[str, Any]) -> dict[str, Any] | None:
+    """检测已保存 API 的连通性；成功才配置到当前程序。"""
+    row = user_db.get_user(int(user["user_id"]))
+    if not row:
+        return None
+    cfg = user_db.api_config(row)
+    if not cfg["configured"]:
+        runtime_ai.deactivate()
+        return None
+    runtime_ai.activate(row)
+    result = runtime_ai.test_connection({
+        "base_url": cfg["base_url"],
+        "api_key": row.get("api_key") or "",
+        "model": cfg["model"],
+    })
+    user_db.set_api_status(int(user["user_id"]), "ok" if result.get("ok") else "error")
+    if not result.get("ok"):
+        runtime_ai.deactivate()
+    return result
+
+
+def _set_user_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        user_db.COOKIE_NAME,
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+        max_age=user_db.SESSION_DAYS * 24 * 3600,
+    )
+
+
+@app.post("/api/auth/login")
+def api_auth_login(payload: AuthRequest, response: Response) -> dict[str, Any]:
+    """邮箱不存在时自动注册并登录；已存在时校验密码。"""
+    try:
+        user, created = user_db.login_or_register(payload.username, payload.password)
+    except user_db.UserAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    api_check = _test_saved_api(user)
+    refreshed = user_db.get_user(int(user["user_id"])) or user
+    token = user_db.create_session(int(user["user_id"]))
+    _set_user_cookie(response, token)
+    return {
+        "ok": True,
+        "created": created,
+        "user": user_db.public_user(refreshed),
+        "api_check": api_check,
+    }
+
+
+@app.get("/api/auth/me")
+def api_auth_me(request: Request) -> dict[str, Any]:
+    user = _current_user(request)
+    if not user:
+        return {"ok": True, "user": None}
+    _activate_saved_api(user)
+    return {"ok": True, "user": user_db.public_user(user)}
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout(request: Request, response: Response) -> dict[str, Any]:
+    user_db.revoke_session(request.cookies.get(user_db.COOKIE_NAME))
+    runtime_ai.deactivate()
+    response.delete_cookie(user_db.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.put("/api/auth/api-config")
+def api_auth_save_api(payload: ApiConfigRequest, request: Request) -> dict[str, Any]:
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录后再同步 API 配置")
+    row = user_db.get_user(int(user["user_id"]))
+    if not row:
+        raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
+
+    if payload.clear:
+        user_db.save_api_config(int(user["user_id"]), base_url="", api_key="",
+                                model="", vision_model="")
+        runtime_ai.deactivate()
+        refreshed = user_db.get_user(int(user["user_id"])) or row
+        return {"ok": True, "user": user_db.public_user(refreshed), "api_check": None}
+
+    existing = user_db.api_config(row)
+    base_url = runtime_ai.normalize_base_url(payload.base_url or existing["base_url"])
+    api_key = (payload.api_key or "").strip() or (row.get("api_key") or "")
+    model = (payload.model or "").strip()
+    vision_model = (payload.vision_model or "").strip() or model
+    try:
+        runtime_ai.validate(base_url=base_url, api_key=api_key, model=model)
+    except runtime_ai.ApiConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    user_db.save_api_config(
+        int(user["user_id"]), base_url=base_url, api_key=api_key,
+        model=model, vision_model=vision_model,
+    )
+    refreshed = user_db.get_user(int(user["user_id"]))
+    api_check = _test_saved_api(refreshed or row)
+    final_user = user_db.get_user(int(user["user_id"])) or refreshed or row
+    return {"ok": True, "user": user_db.public_user(final_user), "api_check": api_check}
+
+
+@app.post("/api/auth/api-test")
+def api_auth_test_api(request: Request) -> dict[str, Any]:
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    row = user_db.get_user(int(user["user_id"]))
+    cfg = user_db.api_config(row or {})
+    if not cfg["configured"]:
+        raise HTTPException(status_code=400, detail="尚未保存完整的 API 配置")
+    result = _test_saved_api(row or user)
+    final_user = user_db.get_user(int(user["user_id"])) or user
+    return {"ok": True, "user": user_db.public_user(final_user), "api_check": result}
+
+
+@app.get("/api/admin/users")
+def api_admin_users(request: Request) -> dict[str, Any]:
+    """root 管理员权限预留：可查看全部用户（含软删除），普通用户禁止跨用户查询。"""
+    user = _current_user(request)
+    if not user or user.get("role") != "root":
+        raise HTTPException(status_code=403, detail="需要 root 管理员权限")
+    return {"ok": True, "items": user_db.list_users()}
 
 @app.get("/api/knowledge")
 def api_knowledge() -> dict[str, Any]:

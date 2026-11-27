@@ -54,6 +54,15 @@
     return parseResponse(response);
   }
 
+  async function putJson(path, body) {
+    var response = await request(buildUrl(path), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body)
+    });
+    return parseResponse(response);
+  }
+
   async function postForm(path, formData) {
     var response = await request(buildUrl(path), {
       method: 'POST',
@@ -139,6 +148,7 @@
     base: API_BASE,
     get: get,
     postJson: postJson,
+    putJson: putJson,
     postForm: postForm,
     remove: remove,
     analyzeMultimodal: analyzeMultimodal,

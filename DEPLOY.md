@@ -88,6 +88,16 @@ DB_ENCRYPT=no
 
 首次启动时自动建库建表并导入种子案例。
 
+### 3.3.1 用户中心数据库（自动创建）
+
+服务首次启动时会在同一 SQL Server 实例自动创建 `[user]` 库（可用 `USER_DB_NAME` 改名），包含：
+
+- `users`：邮箱账号、PBKDF2 密码摘要、角色、每用户 API 配置、`isdeleted`；
+- `user_sessions`：登录会话（只存 token 的 SHA-256 摘要）；
+- `user_data`：共享表 + `user_id` 租户列，按用户隔离配置与数据。
+
+所有租户查询都强制带 `user_id`，并为 `user_id` 建立索引；用户 ID 从 1001 起自增且不回收。内置管理员测试账号：`root` / `zhf123...aA`，仅 root 可访问 `/api/admin/users`。
+
 ### 3.4 安全配置（选填，默认自动生成）
 
 ```

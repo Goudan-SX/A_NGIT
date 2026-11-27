@@ -12,44 +12,64 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from . import ai_common, ai_policy, config
+from . import ai_common, ai_policy, config, runtime_ai
 
 
 class DeepSeekError(RuntimeError):
     """DeepSeek 调用失败。"""
 
 
+def _cfg() -> dict[str, Any]:
+    return runtime_ai.resolve()
+
+
 def is_enabled() -> bool:
+    cfg = _cfg()
+    if not cfg.get("api_key"):
+        return False
+    if runtime_ai.has_override():
+        return True
     return bool(config.DEEPSEEK_ENABLED) and ai_policy.deepseek_allowed()
 
 
 def status() -> dict[str, Any]:
+    cfg = _cfg()
+    source = cfg.get("source", "env")
+    provider = "custom" if source == "user" else "deepseek"
+    note = "已启用 DeepSeek V4.1 Flash（文本 + 视觉）"
+    if source == "user":
+        note = f"已启用用户 API（{provider} · {cfg.get('model')}）"
+    elif not is_enabled():
+        note = ("机器未授权或请求非本机，外部模型已关闭" if config.DEEPSEEK_ENABLED
+                else "未配置 DEEPSEEK_API_KEY")
     return {
         "enabled": is_enabled(),
-        "provider": "deepseek",
-        "base_url": config.DEEPSEEK_BASE_URL,
-        "model": config.DEEPSEEK_MODEL,
-        "vision_model": config.DEEPSEEK_VISION_MODEL,
+        "provider": provider,
+        "source": source,
+        "base_url": cfg.get("base_url"),
+        "model": cfg.get("model"),
+        "vision_model": cfg.get("vision_model"),
         "capabilities": ["text", "image"],
-        "note": ("已启用 DeepSeek V4.1 Flash（文本 + 视觉）" if is_enabled() else ("机器未授权或请求非本机，外部模型已关闭" if config.DEEPSEEK_ENABLED else "未配置 DEEPSEEK_API_KEY")),
+        "note": note,
     }
 
 
 def _post(payload: dict[str, Any]) -> str:
+    cfg = _cfg()
     if not is_enabled():
-        raise DeepSeekError("未配置 DEEPSEEK_API_KEY")
-    url = config.DEEPSEEK_BASE_URL + "/chat/completions"
+        raise DeepSeekError("未配置可用的 AI 接口")
+    url = cfg["base_url"].rstrip("/") + "/chat/completions"
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         method="POST",
         headers={
-            "Authorization": f"Bearer {config.DEEPSEEK_API_KEY}",
+            "Authorization": f"Bearer {cfg['api_key']}",
             "Content-Type": "application/json",
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=config.DEEPSEEK_TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=cfg.get("timeout") or config.DEEPSEEK_TIMEOUT) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]
@@ -109,7 +129,7 @@ CONTACT_PROMPT = """只读取这张聊天窗口顶部区域中的“对方名称
 
 def analyze_text(text: str) -> dict[str, Any]:
     payload = {
-        "model": config.DEEPSEEK_MODEL,
+        "model": _cfg()["model"],
         "temperature": 0.1,
         "messages": [
             {"role": "system", "content": TEXT_SYSTEM_PROMPT},
@@ -146,7 +166,7 @@ def review_text(text: str, case: dict[str, Any]) -> dict[str, Any]:
         "summary": case.get("summary"),
     }
     payload = {
-        "model": config.DEEPSEEK_MODEL,
+        "model": _cfg()["model"],
         "temperature": 0.1,
         "messages": [
             {"role": "system", "content": REVIEW_PROMPT},
@@ -180,7 +200,7 @@ IMAGE_GROUP_PROMPT = """你是多图联合反诈分析员。用户同时上传�
 
 def analyze_image_group(text: str, note: str, images: list[dict[str, Any]]) -> dict[str, Any]:
     payload = {
-        "model": config.DEEPSEEK_MODEL,
+        "model": _cfg()["model"],
         "temperature": 0.1,
         "messages": [
             {"role": "system", "content": IMAGE_GROUP_PROMPT},
@@ -201,7 +221,7 @@ def analyze_image_group(text: str, note: str, images: list[dict[str, Any]]) -> d
 def analyze_image(image_bytes: bytes, content_type: str) -> dict[str, Any]:
     data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {
-        "model": config.DEEPSEEK_VISION_MODEL,
+        "model": _cfg()["vision_model"],
         "temperature": 0.1,
         "messages": [
             {
@@ -222,7 +242,7 @@ def analyze_chat_layout(image_bytes: bytes, content_type: str = "image/png") -> 
     """用视觉模型识别聊天主区域和联系人区域，返回归一化坐标。"""
     data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {
-        "model": config.DEEPSEEK_VISION_MODEL,
+        "model": _cfg()["vision_model"],
         "temperature": 0.0,
         "messages": [
             {
@@ -242,7 +262,7 @@ def analyze_chat_layout(image_bytes: bytes, content_type: str = "image/png") -> 
 def read_contact_name(image_bytes: bytes, content_type: str = "image/png") -> str:
     data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {
-        "model": config.DEEPSEEK_VISION_MODEL,
+        "model": _cfg()["vision_model"],
         "temperature": 0.0,
         "messages": [
             {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
   <title>反诈卫士 · Guardian-AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.5.4" />
+  <link rel="stylesheet" href="../css/style.css?v=1.6.0" />
 </head>
 
 <body>
@@ -34,6 +34,7 @@
         <a class="site-nav__link" href="#quiz" data-view-link="quiz">反诈问答</a>
         <a class="site-nav__link" href="#knowledge" data-view-link="knowledge">知识宣传</a>
         <a class="site-nav__link" href="#images" data-view-link="images">图片采集</a>
+        <a class="site-nav__link" id="nav-api" href="#api" data-view-link="api">API</a>
       </nav>
 
       <div class="region-picker" id="region-picker">
@@ -43,6 +44,21 @@
         <button class="region-picker__badge is-hidden" id="region-badge" type="button" title="点击重新选择">
           <span id="region-badge-text"></span>
           <span class="region-picker__close" aria-hidden="true">✕</span>
+        </button>
+      </div>
+
+      <div class="user-area" id="user-area">
+        <button class="user-area__guest" id="user-guest" type="button" aria-label="登录或注册">
+          <span id="user-login-link" data-auth-open="login" role="button" tabindex="0">登录</span>
+          <span class="user-area__sep" aria-hidden="true">|</span>
+          <span id="user-register-link" data-auth-open="register" role="button" tabindex="0">注册</span>
+        </button>
+        <button class="user-chip is-hidden" id="user-chip" type="button" aria-haspopup="dialog" aria-expanded="false">
+          <span class="user-chip__avatar" id="user-avatar" aria-hidden="true">G</span>
+          <span class="user-chip__text">
+            <span class="user-chip__name" id="user-name">用户</span>
+            <span class="user-chip__meta" id="user-meta">Guardian-AI</span>
+          </span>
         </button>
       </div>
 
@@ -465,7 +481,84 @@
       <div class="image-capture-grid" id="image-capture-grid"></div>
       <p class="empty-inline" id="image-capture-empty">还没有采集到图片。上传图片或从模拟聊天发送图片后，会出现在这里。</p>
     </section>
+
+    <!-- ==================== 视图六：API 接入 ==================== -->
+    <section class="view" id="view-api" aria-labelledby="api-title">
+      <div class="page-head">
+        <div class="page-head__heading">
+          <p class="panel__eyebrow">API 接入</p>
+          <h2 class="panel__title" id="api-title">OpenAI 兼容接口</h2>
+          <p class="field-note">支持所有 OpenAI 兼容格式。填写完成即自动同步到后端，并立即发起一次真实调用测试。</p>
+        </div>
+        <span class="api-state api-state--idle" id="api-state-badge">
+          <i aria-hidden="true"></i><span id="api-state-text">未配置</span>
+        </span>
+      </div>
+
+      <div class="api-layout">
+        <section class="panel api-card">
+          <div class="api-gate is-hidden" id="api-gate">
+            <p class="api-gate__title">登录后即可保存 API 配置</p>
+            <p class="api-gate__desc">API 地址与 Key 按用户隔离保存在 SQL Server 用户库；登录后自动恢复并检测连通性。</p>
+            <button class="btn btn--primary" id="api-gate-login" type="button">登录 / 注册</button>
+          </div>
+          <form class="api-form" id="api-form" autocomplete="off">
+            <label class="form-label" for="api-base-url">API 地址</label>
+            <input class="form-input" id="api-base-url" type="url" placeholder="https://api.openai.com/v1" spellcheck="false" />
+            <p class="api-field-tip">填写到版本号即可，例如 .../v1；末尾无需 /chat/completions。</p>
+
+            <label class="form-label" for="api-key">API Key</label>
+            <div class="api-key-row">
+              <input class="form-input" id="api-key" type="password" placeholder="sk-..." spellcheck="false" />
+              <button class="btn btn--ghost btn--sm" id="api-key-toggle" type="button">显示</button>
+            </div>
+            <p class="api-field-tip" id="api-key-tip">Key 仅保存在本机数据库，不会回显到页面。</p>
+
+            <div class="api-grid">
+              <div>
+                <label class="form-label" for="api-model">文本模型</label>
+                <input class="form-input" id="api-model" type="text" placeholder="gpt-4o-mini / deepseek-chat" spellcheck="false" />
+              </div>
+              <div>
+                <label class="form-label" for="api-vision-model">视觉模型（可选）</label>
+                <input class="form-input" id="api-vision-model" type="text" placeholder="留空则复用文本模型" spellcheck="false" />
+              </div>
+            </div>
+
+            <div class="api-form__actions">
+              <button class="btn btn--primary" id="api-save-btn" type="button">保存并测试</button>
+              <button class="btn btn--ghost" id="api-test-btn" type="button">测试连接</button>
+              <button class="btn btn--ghost" id="api-clear-btn" type="button">重置配置</button>
+            </div>
+            <p class="api-autosync" id="api-autosync"><span class="api-autosync__dot"></span>输入完成后自动同步</p>
+          </form>
+        </section>
+
+        <aside class="panel api-status-card">
+          <div class="analysis-block__head">
+            <h3 class="analysis-block__title">连接状态</h3>
+            <span class="api-status-pill" id="api-status-pill">未测试</span>
+          </div>
+          <dl class="api-status-list">
+            <div><dt>当前应用</dt><dd id="api-status-provider">本地规则 / .env</dd></div>
+            <div><dt>文本模型</dt><dd id="api-status-model">—</dd></div>
+            <div><dt>最近检测</dt><dd id="api-status-time">—</dd></div>
+            <div><dt>响应延迟</dt><dd id="api-status-latency">—</dd></div>
+          </dl>
+          <p class="api-status-message" id="api-status-message">登录后可保存并检测你的 OpenAI 兼容接口。</p>
+          <div class="api-tips">
+            <p class="api-tips__title">兼容说明</p>
+            <ul>
+              <li>请求路径按 <code>/chat/completions</code> 调用，鉴权使用 <code>Authorization: Bearer</code>。</li>
+              <li>登录时自动检测；连接失败时顶部 “API” 导航会闪烁粉色提醒。</li>
+              <li>连接正常后，文本、图片与语音分析会直接切换到你的接口。</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </section>
   </main>
+
 
   <!-- ==================== 页脚 ==================== -->
   <footer class="site-footer">
@@ -553,9 +646,65 @@
     </div>
   </div>
 
+
+  <!-- ==================== 登录 / 注册 / 个人信息 ==================== -->
+  <div class="modal is-hidden" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="modal__backdrop" data-close="auth-modal"></div>
+    <div class="modal__panel auth-modal__panel">
+      <div class="auth-hero">
+        <button class="icon-btn auth-hero__close" type="button" data-close="auth-modal" aria-label="关闭">×</button>
+        <p class="auth-hero__eyebrow">Guardian-AI 用户中心</p>
+        <h2 class="auth-hero__title" id="auth-title">账号登录</h2>
+        <p class="auth-hero__desc">邮箱账号 · 登录即注册</p>
+      </div>
+      <div class="modal__body auth-body">
+        <div class="auth-account is-hidden" id="auth-account">
+          <div class="auth-account__head">
+            <span class="auth-account__avatar" id="auth-account-avatar">G</span>
+            <div class="auth-account__info">
+              <strong id="auth-account-name">—</strong>
+              <p id="auth-account-role">普通用户</p>
+            </div>
+          </div>
+          <dl class="auth-account__list">
+            <div><dt>用户 ID</dt><dd id="auth-account-id">—</dd></div>
+            <div><dt>API 状态</dt><dd id="auth-account-api">未配置</dd></div>
+            <div><dt>最近登录</dt><dd id="auth-account-last">—</dd></div>
+          </dl>
+          <div class="auth-account__actions">
+            <button class="btn btn--primary" id="auth-goto-api" type="button">配置 API</button>
+            <button class="btn btn--ghost" id="auth-logout" type="button">退出登录</button>
+          </div>
+        </div>
+
+        <form class="auth-form" id="auth-form" autocomplete="on">
+          <div class="auth-tabs" role="tablist">
+            <button class="auth-tab is-active" type="button" data-auth-mode="login">账号登录</button>
+            <button class="auth-tab" type="button" data-auth-mode="register">注册</button>
+          </div>
+          <label class="form-label" for="auth-username">邮箱 / 用户名</label>
+          <input class="form-input" id="auth-username" type="text" placeholder="请输入邮箱地址" autocomplete="username" />
+          <label class="form-label" for="auth-password">密码</label>
+          <div class="auth-password-row">
+            <input class="form-input" id="auth-password" type="password" placeholder="请输入密码（至少 6 位）" autocomplete="current-password" />
+            <button class="btn btn--ghost btn--sm" id="auth-password-toggle" type="button">显示</button>
+          </div>
+          <label class="auth-privacy">
+            <input type="checkbox" id="auth-privacy" />
+            <span>我已阅读并同意 <a href="#" id="auth-privacy-link">隐私政策</a></span>
+          </label>
+          <p class="auth-hint" id="auth-hint">如果数据库中没有该邮箱，将自动注册并登录。</p>
+          <p class="auth-message is-hidden" id="auth-message" role="status"></p>
+          <button class="btn btn--primary auth-submit" id="auth-submit" type="submit">登录</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.5.4"></script>
-  <script src="../js/app.js?v=1.5.4"></script>
+  <script src="../js/api.js?v=1.6.0"></script>
+  <script src="../js/app.js?v=1.6.0"></script>
+  <script src="../js/user.js?v=1.6.0"></script>
 </body>
 </html>
