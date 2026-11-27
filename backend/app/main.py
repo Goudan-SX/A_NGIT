@@ -132,6 +132,12 @@ class MonitorPublishRequest(BaseModel):
     result: dict[str, Any] = Field(default_factory=dict)
     source: str = Field(default="tray", max_length=40)
     window: str = Field(default="", max_length=120)
+
+
+class MonitorAnalyzeRequest(BaseModel):
+    text: str = Field(default="", max_length=20000)
+    window: str = Field(default="", max_length=120)
+    client_id: str = Field(default="tray-service", max_length=64)
     fast: bool = False
 
 
@@ -563,6 +569,22 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
     result["engine"]["note"] = result["engine"].get("note", "Guardian-AI 语义精判")
     result_cache.text_cache.set(cache_key, {"result": result, "match": match})
     return result, match
+
+
+@app.post("/api/monitor/analyze")
+def api_monitor_analyze(payload: MonitorAnalyzeRequest) -> dict[str, Any]:
+    """托盘专用快速通道：只跑本地规则，立即返回并同步 Web。"""
+    result = analyzer.analyze_text(payload.text)
+    result = analyzer.build_hit_contract(result, payload.text)
+    result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    safe_text = analyzer.mask_text(payload.text, result)
+    item = monitor_state.publish(
+        text=safe_text,
+        result=result,
+        source="tray-local",
+        window=payload.window,
+    )
+    return {"ok": True, "analysis": result, "item": item}
 
 
 @app.post("/api/monitor/publish")

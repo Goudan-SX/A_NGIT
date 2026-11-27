@@ -136,6 +136,44 @@ SIGNALS: list[dict[str, Any]] = [
         "patterns": [r"(名额有限|最后\s*\d+\s*个|仅限今天|限时抢购|先到先得)"],
     },
 
+    # ---------------- 会员扣费/取消订阅钓鱼 ----------------
+    {
+        "id": "subscription_fee",
+        "label": "会员自动扣费恐吓",
+        "dim": "financial",
+        "weight": 30,
+        "severity": "critical",
+        "scam_types": ["冒充客服退款", "钓鱼链接/木马"],
+        "patterns": [r"(系统检测|检测到|系统提示|系统通知).{0,16}(开通|会员|服务).{0,24}(自动扣费|自动续费|扣费|续费)"],
+    },
+    {
+        "id": "fake_official_notice",
+        "label": "伪造平台官方通知",
+        "dim": "identity",
+        "weight": 10,
+        "severity": "high",
+        "scam_types": ["冒充客服退款", "钓鱼链接/木马"],
+        "patterns": [r"(系统检测|系统通知|官方通知|系统提示).{0,20}(会员|扣费|冻结|异常)"],
+    },
+    {
+        "id": "click_cancel_link",
+        "label": "诱导点击取消链接",
+        "dim": "channel",
+        "weight": 15,
+        "severity": "high",
+        "scam_types": ["钓鱼链接/木马", "冒充客服退款"],
+        "patterns": [r"(点击|点开|打开).{0,8}(链接|网址).{0,12}(取消|关闭|退订|处理)"],
+    },
+    {
+        "id": "subscription_urgency",
+        "label": "扣费恐吓制造紧迫",
+        "dim": "script",
+        "weight": 15,
+        "severity": "high",
+        "scam_types": ["冒充客服退款", "钓鱼链接/木马"],
+        "patterns": [r"(立即|马上|尽快).{0,8}(取消|关闭|退订|处理|操作)"],
+    },
+
     # ---------------- 资金诱导 ----------------
     {
         "id": "brushing",

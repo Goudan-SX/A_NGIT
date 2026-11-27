@@ -213,30 +213,25 @@ def read_visible_text(window_title: str) -> str:
         return ""
 
 
-def analyze(text: str) -> dict | None:
+def analyze(text: str, window_title: str) -> dict | None:
+    """托盘专用快速通道：只跑本地规则，不等 DeepSeek。"""
     token = security.get_local_token()
-    external = bool(load_config().get("external_ai_consent", True))
-    if external:
-        local_result = analyzer.analyze_text(text)
-        text = analyzer.mask_text(text, local_result)
     payload = json.dumps({
         "text": text,
-        "save": False,
-        "fast": False,
+        "window": window_title[:120],
         "client_id": "tray-service",
     }).encode("utf-8")
     request = Request(
-        API_BASE + "/api/analyze/text",
+        API_BASE + "/api/monitor/analyze",
         data=payload,
         headers={
             "Content-Type": "application/json",
             "X-Guardian-Token": token,
-            "X-Guardian-External-AI": "true" if external else "false",
         },
         method="POST",
     )
     try:
-        with urlopen(request, timeout=45) as response:
+        with urlopen(request, timeout=15) as response:
             return json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
         return None
@@ -313,11 +308,10 @@ def tick() -> None:
     if digest == _last_hash:
         return
     _last_hash = digest
-    data = analyze(text)
+    data = analyze(text, title)
     if not data or not data.get("analysis"):
         return
     result = data["analysis"]
-    publish_result(text, result, title)
     score = int(result.get("risk_score", 0))
     if score >= 70:
         alert_overlay.alert(score, str(result.get("summary", "")), title)
