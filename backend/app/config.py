@@ -35,7 +35,7 @@ load_dotenv()
 
 APP_NAME = "Guardian-AI API"
 APP_VERSION = "2.0.0"
-HOST = os.getenv("APP_HOST", "127.0.0.1")
+HOST = os.getenv("APP_HOST", "0.0.0.0")
 PORT = int(os.getenv("APP_PORT", "8000"))
 
 # --------------------------------------------------------------------------

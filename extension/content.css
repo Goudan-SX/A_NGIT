@@ -1,0 +1,96 @@
+#guardian-ai-badge {
+  position: fixed;
+  top: 120px;
+  right: 20px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 4px solid #111111;
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.22);
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+  color: #111111;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+#guardian-ai-badge:hover {
+  transform: scale(1.05);
+}
+
+#guardian-ai-badge .guardian-letter {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#guardian-ai-badge .guardian-score {
+  display: none;
+  align-items: baseline;
+  gap: 1px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#guardian-ai-badge .guardian-score__value {
+  font-size: 18px;
+}
+
+#guardian-ai-badge .guardian-score__unit {
+  font-size: 10px;
+}
+
+#guardian-ai-badge.guardian-active .guardian-letter {
+  display: none;
+}
+
+#guardian-ai-badge.guardian-active .guardian-score {
+  display: flex;
+}
+
+#guardian-ai-badge.guardian-green {
+  color: #16a34a;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.16), 0 6px 20px rgba(15, 23, 42, 0.2);
+}
+
+#guardian-ai-badge.guardian-yellow {
+  color: #ca8a04;
+  border-color: #eab308;
+  box-shadow: 0 0 0 5px rgba(234, 179, 8, 0.18), 0 6px 20px rgba(15, 23, 42, 0.2);
+}
+
+#guardian-ai-badge.guardian-orange {
+  color: #ea580c;
+  border-color: #fb7185;
+  box-shadow: 0 0 0 5px rgba(251, 113, 133, 0.2), 0 6px 20px rgba(15, 23, 42, 0.2);
+}
+
+#guardian-ai-badge.guardian-red {
+  color: #dc2626;
+  border-color: #dc2626;
+  animation: guardian-ai-flash 0.9s ease-in-out infinite;
+}
+
+#guardian-ai-badge.guardian-offline {
+  color: #64748b;
+  border-color: #94a3b8;
+}
+
+@keyframes guardian-ai-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18), 0 6px 20px rgba(15, 23, 42, 0.2);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(220, 38, 38, 0.05), 0 6px 20px rgba(15, 23, 42, 0.2);
+    opacity: 0.72;
+  }
+}

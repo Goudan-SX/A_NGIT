@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>模拟聊天 · Guardian-AI</title>
+  <link rel="stylesheet" href="../css/style.css?v=1.2.2" />
+</head>
+<body>
+  <h1 class="visually-hidden">Guardian-AI 模拟聊天与实时诈骗检测</h1>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="index.html" aria-label="Guardian-AI 首页">
+        <span class="brand__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 4.5 6v6c0 4.2 3.1 7.6 7.5 9 4.4-1.4 7.5-4.8 7.5-9V6L12 3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </span>
+        <span class="brand__text">
+          <span class="brand__name">反诈卫士</span>
+          <span class="brand__slogan">Guardian-AI · 模拟对话</span>
+        </span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a class="site-nav__link" href="index.html">AI 管家</a>
+        <a class="site-nav__link site-nav__link--active" href="chat.html" aria-current="page">模拟聊天</a>
+        <a class="site-nav__link" href="history.html">历史记录</a>
+        <a class="site-nav__link" href="logs.html">日志</a>
+      </nav>
+      <p class="guard-status">
+        <span class="guard-status__dot" aria-hidden="true"></span>
+        <span id="chat-status">连接中…</span>
+      </p>
+    </div>
+  </header>
+
+  <main class="chat-layout">
+    <section class="panel chat-panel" aria-labelledby="chat-room-title">
+      <header class="panel__header">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">远程对话</p>
+          <h2 class="panel__title" id="chat-room-title">房间：<span id="room-name">demo</span></h2>
+        </div>
+        <button class="btn btn--ghost btn--sm" id="copy-room-btn" type="button">复制邀请链接</button>
+      </header>
+
+      <div class="chat-tip">
+        <span>对方通过同一局域网访问本页面并输入相同房间号，即可远程对话。</span>
+        <span id="chat-client-name"></span>
+      </div>
+
+      <div class="chat-log" id="chat-log" role="log" aria-live="polite">
+        <div class="chat-empty" id="chat-empty">
+          <strong>还没有聊天记录</strong>
+          <span>发送第一句话开始模拟；Guardian-AI 只分析当前聊天内容。</span>
+        </div>
+      </div>
+
+      <div class="chat-composer">
+        <label class="visually-hidden" for="chat-input">输入消息</label>
+        <textarea id="chat-input" class="chat-composer__input" rows="2"
+          placeholder="输入消息，Enter 发送，Shift+Enter 换行…"></textarea>
+        <button class="btn btn--primary" id="chat-send" type="button">发送</button>
+      </div>
+      <p class="field-note">只转发当前聊天文本；不读取账号、密码、Cookie 等敏感信息。</p>
+    </section>
+
+    <aside class="panel panel--analysis chat-analysis" aria-labelledby="chat-analysis-title">
+      <header class="panel__header">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">Guardian-AI 研判</p>
+          <h2 class="panel__title" id="chat-analysis-title">当前聊天风险</h2>
+        </div>
+        <p class="chip chip--ai"><span class="chip__dot" aria-hidden="true"></span><span id="chat-engine">等待消息</span></p>
+      </header>
+
+      <div class="risk-overview">
+        <div class="risk-ring risk-ring--low" id="chat-risk-ring" role="img" aria-label="当前聊天风险 0%">
+          <div class="risk-ring__inner">
+            <strong class="risk-ring__value" id="chat-risk-score">0<span>%</span></strong>
+            <span class="risk-ring__label">诈骗风险</span>
+          </div>
+        </div>
+        <div class="risk-summary">
+          <p class="risk-summary__level" id="chat-risk-level">
+            <span class="risk-summary__dot" aria-hidden="true"></span>
+            <span id="chat-risk-level-text">等待聊天内容</span>
+          </p>
+          <h3 class="risk-summary__title" id="chat-risk-title">发送消息后开始实时检测</h3>
+          <p class="risk-summary__desc" id="chat-risk-desc">Guardian-AI 只分析当前会话的聊天记录。</p>
+        </div>
+      </div>
+
+      <section class="analysis-block">
+        <div class="analysis-block__head">
+          <h3 class="analysis-block__title">Guardian-AI 评分</h3>
+          <span class="analysis-block__count">满分 100</span>
+        </div>
+        <ul class="dimension-list" id="chat-dimension-list">
+          <li class="dimension"><span class="dimension__name">等待检测</span><span class="dimension__bar"><i style="width:0%"></i></span><span class="dimension__score">0</span></li>
+        </ul>
+      </section>
+
+      <section class="analysis-block">
+        <div class="analysis-block__head">
+          <h3 class="analysis-block__title">命中关键词</h3>
+          <span class="analysis-block__count" id="chat-keyword-count">0 项</span>
+        </div>
+        <ul class="tag-list" id="chat-keyword-list"><li class="empty-inline">等待检测</li></ul>
+      </section>
+
+      <section class="analysis-block">
+        <div class="analysis-block__head">
+          <h3 class="analysis-block__title">处置建议</h3>
+          <span class="analysis-block__count" id="chat-suggestion-count">0 条</span>
+        </div>
+        <ol class="suggestion-list" id="chat-suggestion-list"><li class="empty-inline">暂无建议</li></ol>
+      </section>
+
+      <div class="action-grid">
+        <a class="btn btn--ghost" href="index.html">打开完整检测台</a>
+        <button class="btn" id="chat-deep-check" type="button">AI 深度复核</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="site-footer">
+    <p>Guardian-AI · 模拟对话 · 只分析当前聊天内容</p>
+    <p>WebSocket over TCP/IP · 局域网远程联调</p>
+    <p class="site-footer__links"><a href="index.html">返回检测台</a><span aria-hidden="true">·</span><a href="history.html">历史记录</a></p>
+  </footer>
+
+  <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
+  <script src="../js/api.js?v=1.2.2"></script>
+  <script src="../js/chat.js?v=1.2.2"></script>
+</body>
+</html>

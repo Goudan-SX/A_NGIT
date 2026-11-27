@@ -25,6 +25,8 @@ Guardian-AI 是统一模型名称；它是一个可运行的全栈反诈演示�
 - 关键词规则库：245 条反诈关键词，覆盖游戏皮肤、公检法、刷单、票务、校园收费等；Aho-Corasick 单次扫描。
 - 分省案例：411 条青少年案例按省份入库，可在“知识宣传 → 分省案例”中查看，也可通过 API 查询。
 - 自动扩充案例库：未命中的有效文本在检测后自动收录，下一次相同/相似内容可直接命中。
+- 模拟聊天：WebSocket over TCP/IP 双人远程对话，左侧按“对方/你”显示消息与秒级时间，右侧实时 Guardian-AI 研判。
+- 浏览器插件：聊天网页悬浮窗，未进聊天页显示 G；进入并检测到消息后显示风险率，<30 绿 / 30–49 黄 / 50–69 橙粉 / ≥70 红色闪烁，单击打开程序网页。
 - 多图同步分析：多张图片并发识别后，再由 DeepSeek 做跨图联合分析，输出图片之间的关联、矛盾与整体风险。
 - 图片放大：点击左侧上传图片或右侧多模态缩略图，可打开原图预览。
 - 速度优化：文本先出本地/数据库快速预判，再异步替换为 AI 复核结果；精确文本缓存 7 天 AI 复核，图片按 SHA-256 缓存视觉结果。
@@ -85,6 +87,7 @@ A_NGIT/
 ├── HTML+CSS/                      # 前端（保持团队约定的 HTML+CSS 目录）
 │   ├── html/
 │   │   ├── index.html             # AI 管家 + 每日一反诈 + 反诈问答 + 知识宣传
+│   │   ├── chat.html              # 双人远程模拟聊天 + 实时研判
 │   │   ├── history.html           # 历史检测记录
 │   │   └── logs.html              # 运行日志
 │   ├── css/
@@ -92,6 +95,7 @@ A_NGIT/
 │   └── js/
 │       ├── api.js                 # API 客户端
 │       ├── app.js                 # 主页面交互与多模态检测
+│       ├── chat.js                # 模拟聊天 WebSocket + 实时分析
 │       ├── history.js             # 历史记录页
 │       └── logs.js                # 日志页
 ├── backend/
@@ -114,10 +118,14 @@ A_NGIT/
 │   ├── ml/                        # 交易风控特征工程与训练脚本
 │   ├── models/                    # LightGBM 模型、元数据、规则 JSON
 │   ├── database/schema.sql        # 表结构 + 科普种子数据
-│   ├── data/                      # 上传文件与缩略图（不提交）
+│   ├── data/                      # 上传文件、关键词与分省案例
 │   ├── seed_demo.py               # 演示数据初始化
 │   ├── requirements.txt
 │   └── run.py                     # 开发启动入口
+├── extension/                     # Chrome/Edge 悬浮窗插件
+│   ├── manifest.json
+│   ├── content.js
+│   └── content.css
 ├── .env.example                   # 环境变量示例
 ├── run.bat / setup.bat            # Windows 一键启动 / 安装依赖
 └── README.md
@@ -164,7 +172,8 @@ python backend/run.py
 
 <http://127.0.0.1:8000/>
 
-> 也可以使用 `uvicorn backend.app.main:app --reload --port 8000` 启动。
+> 也可以使用 `uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000` 启动。
+> 局域网远程聊天：打开 `http://<本机局域网IP>:8000/chat.html?room=demo`。
 > 直接双击 HTML 文件也能查看页面，但 API 会回退到 `http://127.0.0.1:8000`，仍需启动后端。
 
 ### 4. 初始化演示数据（可选）
@@ -318,6 +327,7 @@ Kaggle Indian Financial Fraud Dataset 是 4 张表、25 万条合成交易、约
 | POST | `/api/transaction/risk` | 交易欺诈概率 + 规则命中 + 风险等级 |
 | GET | `/api/transaction/model-info` | 交易模型指标与可用状态 |
 | GET | `/api/transaction/rules` | 交易风控规则列表 |
+| WS | `/ws/chat/{room}` | 双人模拟聊天转发（内存，不写库） |
 | GET | `/api/logs/stats` | 日志级别统计 |
 | GET | `/api/knowledge` | 科普内容 |
 | GET | `/api/guardian/provinces` | 分省案例省份统计 |
@@ -351,7 +361,7 @@ Kaggle Indian Financial Fraud Dataset 是 4 张表、25 万条合成交易、约
 
 ## 十一、演示建议
 
-1. 打开首页，默认示例文本会立即得到 86% 左右的高风险结论；
+1. 打开首页，默认示例文本会立即得到 70% 左右的高风险结论；
 2. 指出五个评分维度、命中的证据原文、风险等级；
 3. 上传一张包含“验证码 / 屏幕共享 / 转账”的聊天截图，展示 DeepSeek V4.1 视觉理解与跨模态融合；
 4. 粘贴包含手机号、身份证、银行卡、验证码的文本，展示 PII 打码与“一键脱敏”；
@@ -361,7 +371,34 @@ Kaggle Indian Financial Fraud Dataset 是 4 张表、25 万条合成交易、约
 
 ---
 
-## 十二、安全与限制
+## 十二、模拟聊天与浏览器插件
+
+### 模拟聊天
+
+后端提供 `WS /ws/chat/{room}`，浏览器之间通过 WebSocket（TCP/IP）转发消息，历史只保存在服务内存，不写数据库。
+
+启动时监听局域网：
+
+python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+
+两台设备连接同一 Wi-Fi，分别打开：
+
+http://<运行后端电脑的局域网IP>:8000/chat.html?room=demo
+
+左侧消息按“对方 / 你”显示，时间精确到秒；右侧实时显示 Guardian-AI 评分。
+
+### 浏览器插件
+
+目录 `extension/`，Chrome/Edge 打开扩展管理页，开启开发者模式，加载已解压的扩展程序。
+
+- 未进入聊天页面：黑圈白底 G，保持待机；
+- 进入聊天页面且检测到消息：显示风险百分比；
+- <30 绿色，30–49 黄色，50–69 橙色偏粉，≥70 红色闪烁；
+- 单击悬浮窗打开 http://127.0.0.1:8000/。
+
+插件只读取聊天消息节点，不读取密码框、输入框、Cookie 等敏感信息；检测请求 `save=false`，不写 SQL Server。
+
+## 十三、安全与限制
 
 - 所有 PII 在接口返回前已打码，原始值不通过 API 返回；一键脱敏后原文本会立即替换。
 - 举报材料不会自动提交给官方平台，只生成可复制的结构化文本，避免误报与越权。
@@ -372,14 +409,14 @@ Kaggle Indian Financial Fraud Dataset 是 4 张表、25 万条合成交易、约
 
 ---
 
-## 十三、代码规范
+## 十四、代码规范
 
 - 前端 2 空格缩进，CSS 使用 BEM 命名，颜色/圆角/字体统一收敛到 `:root` 变量；
 - 后端按 `config → db/repository → analyzer/qwen/ocr → main` 分层，路由不直接写 SQL；
 - 分析结果统一为 JSON，保留维度、证据、建议与引擎信息，方便前端渲染与答辩讲解；
 - 提交信息建议使用 `feat:` / `fix:` / `style:` / `docs:` 前缀。
 
-## 十四、团队协作
+## 十五、团队协作
 
 - 仓库默认分支：`main`；
 - 建议每人使用独立分支，例如 `feature/analysis-engine`；

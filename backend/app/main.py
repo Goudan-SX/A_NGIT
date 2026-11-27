@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +57,43 @@ app = FastAPI(
     description="反诈卫士：面向青年的 AI 诈骗识别与个人信息保护助手",
     lifespan=lifespan,
 )
+
+class ChatRoomManager:
+    """内存聊天室：只保存当前会话，不写数据库。"""
+
+    def __init__(self) -> None:
+        self.rooms: dict[str, set[WebSocket]] = {}
+        self.history: dict[str, list[dict[str, Any]]] = {}
+
+    async def connect(self, room: str, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self.rooms.setdefault(room, set()).add(websocket)
+        for item in self.history.get(room, [])[-50:]:
+            await websocket.send_json(item)
+
+    def disconnect(self, room: str, websocket: WebSocket) -> None:
+        connections = self.rooms.get(room)
+        if connections:
+            connections.discard(websocket)
+            if not connections:
+                self.rooms.pop(room, None)
+
+    async def broadcast(self, room: str, payload: dict[str, Any]) -> None:
+        if payload.get("type") == "message":
+            self.history.setdefault(room, []).append(payload)
+            self.history[room] = self.history[room][-100:]
+        dead = []
+        for websocket in list(self.rooms.get(room, set())):
+            try:
+                await websocket.send_json(payload)
+            except Exception:  # noqa: BLE001
+                dead.append(websocket)
+        for websocket in dead:
+            self.disconnect(room, websocket)
+
+
+chat_rooms = ChatRoomManager()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -185,6 +222,40 @@ def _ai_status() -> dict[str, Any]:
         "deepseek": deepseek_status,
         "qwen": qwen_status,
     }
+
+
+@app.websocket("/ws/chat/{room}")
+async def chat_websocket(websocket: WebSocket, room: str, client_id: str = "", name: str = ""):
+    """WebSocket 聊天室（基于 TCP/IP，支持局域网远程对话）。
+
+    只转发当前聊天内容，历史仅保存在内存，不写入 SQL Server。
+    """
+    room = (room or "demo")[:64]
+    client_id = (client_id or uuid.uuid4().hex)[:64]
+    display_name = (name or "访客")[:32]
+    await chat_rooms.connect(room, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") != "message":
+                continue
+            text = str(data.get("text", ""))[:2000].strip()
+            if not text:
+                continue
+            payload = {
+                "type": "message",
+                "id": uuid.uuid4().hex,
+                "room": room,
+                "client_id": client_id,
+                "name": display_name,
+                "text": text,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            await chat_rooms.broadcast(room, payload)
+    except WebSocketDisconnect:
+        chat_rooms.disconnect(room, websocket)
+    except Exception:  # noqa: BLE001
+        chat_rooms.disconnect(room, websocket)
 
 
 @app.get("/api/health")
@@ -1169,6 +1240,11 @@ def index_page() -> FileResponse:
 @app.get("/index.html")
 def index_page_explicit() -> FileResponse:
     return FileResponse(config.FRONTEND_DIR / "html" / "index.html")
+
+
+@app.get("/chat.html")
+def chat_page() -> FileResponse:
+    return FileResponse(config.FRONTEND_DIR / "html" / "chat.html")
 
 
 @app.get("/history.html")
