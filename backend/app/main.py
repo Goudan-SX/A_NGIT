@@ -605,6 +605,7 @@ def _refine_monitor(payload: MonitorAnalyzeRequest) -> None:
         result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         result["match"] = match
         safe_text = analyzer.mask_text(payload.text, result)
+        time.sleep(0.8)
         monitor_state.publish(
             text=safe_text,
             result=result,
@@ -646,15 +647,9 @@ def api_monitor_analyze(payload: MonitorAnalyzeRequest, background: BackgroundTa
     result = analyzer.build_hit_contract(result, payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     result["match"] = match
-    safe_text = analyzer.mask_text(payload.text, result)
-    item = monitor_state.publish(
-        text=safe_text,
-        result=result,
-        source="tray-database",
-        window=payload.window,
-    )
+    # 先不推 Web：由托盘收到结果、先弹本机告警，再主动 publish 到 Web。
     background.add_task(_refine_monitor, payload)
-    return {"ok": True, "analysis": result, "item": item}
+    return {"ok": True, "analysis": result, "item": None}
 
 
 @app.post("/api/monitor/publish")

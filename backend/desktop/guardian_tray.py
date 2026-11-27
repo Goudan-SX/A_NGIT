@@ -47,6 +47,8 @@ _last_hash = ""
 _last_alert_at = 0.0
 _last_alert_key = ""
 _last_ocr_at = 0.0
+_last_ai_alert_id = ""
+GENERIC_CONTACTS = {"微信", "WeChat", "QQ", "TIM", "搜索", "发送", "未知用户"}
 _stop = threading.Event()
 _paused = False
 _allowed_titles: list[str] = []
@@ -316,16 +318,26 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
     header_lines = [line.strip() for line in (header_text or "").splitlines() if line.strip()]
     contact = window_title or "未知用户"
     for line in header_lines:
-        if len(line) <= 60 and line not in {"微信", "WeChat", "搜索", "发送"} and not re.fullmatch(r"\d{1,2}:\d{2}", line):
-            contact = line[:60]
+        cleaned = line.strip(" ·|｜")
+        if len(cleaned) <= 60 and cleaned not in {"微信", "WeChat", "QQ", "TIM", "搜索", "发送"} and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
+            contact = cleaned[:60]
             break
+    # QQ 的当前联系人显示在窗口标题栏；微信标题栏只是“微信”，需跳过。
+    title_text = _ocr_region((left + 70, top, min(right, left + 420), top + 52))
+    for line in (title_text or "").splitlines():
+        cleaned = re.sub(r"^[·．\s]+", "", line).strip(" ·|｜")
+        if len(cleaned) <= 60 and cleaned not in {"微信", "WeChat", "QQ", "TIM", "搜索", "发送"} and not re.fullmatch(r"\d{1,2}:\d{2}", cleaned):
+            contact = cleaned[:60]
+            break
+    if contact in GENERIC_CONTACTS:
+        return None
     lines = [line.strip() for line in (body_text or "").splitlines() if line.strip()]
     if lines and len(lines[0]) <= 60 and lines[0] == contact:
         lines = lines[1:]
     messages = []
     for value in lines:
         value = re.sub(r"^\d{1,2}:\d{2}\s*", "", value).strip()
-        if value and value not in {"发送", "搜索", "长按鼠标", "语音输入", "表情", "微信"} and value != contact:
+        if value and value != contact and not _is_chat_noise(value):
             messages.append(value[:500])
     if not messages:
         return None
@@ -359,12 +371,14 @@ def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
             elif not re.fullmatch(r"\d{1,2}:\d{2}", value):
                 messages.append(value)
         contact = (header[0] if header else (window_title or "未知用户")).strip()[:60]
+        if contact in GENERIC_CONTACTS:
+            return None
         # 从最新消息往前截取，避免长文本把输入/请求拖慢。
         cleaned = []
         total = 0
         for value in reversed(messages):
             value = value.strip()
-            if not value or value in {"发送", "长按鼠标", "语音输入", "表情"}:
+            if _is_chat_noise(value):
                 continue
             value = value[:500]
             if total + len(value) > 3000:
@@ -377,6 +391,11 @@ def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
         return contact, cleaned
     except Exception:  # noqa: BLE001
         return None
+
+
+def _is_chat_noise(value: str) -> bool:
+    noisy = ("按住", "语音输入", "发送", "搜索", "长按鼠标", "表情", "聊天信息", "折叠置顶")
+    return len(value.strip()) < 2 or any(word in value for word in noisy)
 
 
 def format_chat(contact: str, messages: list[str]) -> str:
@@ -490,12 +509,44 @@ def notify(window_title: str, result: dict) -> None:
         toast.show()
     except Exception:  # noqa: BLE001
         pass
+    try:
+        if _icon:
+            _icon.notify(f"风险 {result.get('risk_score', 0)}%：{(result.get('summary') or '')[:80]}", "Guardian-AI")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def check_ai_alert() -> None:
+    """后台 AI 初审完成后，托盘主动拉取并优先弹本机告警。"""
+    global _last_ai_alert_id
+    try:
+        request = Request(
+            API_BASE + "/api/monitor/latest",
+            headers={"Accept": "application/json", "X-Guardian-Token": security.get_local_token()},
+            method="GET",
+        )
+        with urlopen(request, timeout=3) as response:
+            item = json.loads(response.read().decode("utf-8")).get("item") or {}
+        if item.get("source") != "tray-ai":
+            return
+        result = item.get("result") or {}
+        score = int(result.get("risk_score", 0))
+        if score < 70 or item.get("id") == _last_ai_alert_id:
+            return
+        _last_ai_alert_id = str(item.get("id") or "")
+        window = str(item.get("window") or "当前对话")
+        alert_overlay.alert(score, str(result.get("summary", "")), window)
+        record_alert(window, result)
+        notify(window, result)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def tick() -> None:
     global _last_hash, _last_alert_at, _last_alert_key
     if _paused or _stop.is_set():
         return
+    check_ai_alert()
     found = foreground_window()
     active = bool(found and allowed(found[0]))
     alert_overlay.set_foreground(active)
@@ -531,6 +582,8 @@ def tick() -> None:
             _last_alert_at = time.time()
             record_alert(contact, result)
             notify(contact, result)
+    # 本机告警已经触发后，再把数据同步给 Web；Web 允许延迟，但不能反超本机。
+    publish_result(text, result, title)
     if _icon:
         _icon.title = f"Guardian-AI · 监测中 · 最近 {score}%"
 
