@@ -23,6 +23,11 @@
       '<span class="guardian-letter">G</span>' +
       '<span class="guardian-score"><span class="guardian-score__value">0</span>' +
       '<span class="guardian-score__unit">%</span></span>';
+    badge.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;' +
+      'display:flex;align-items:center;justify-content:center;width:38px;height:38px;' +
+      'box-sizing:border-box;background:#fff;border-width:3px;border-style:solid;' +
+      'border-radius:50%;font-family:"Microsoft YaHei","微软雅黑",sans-serif;' +
+      'cursor:pointer;user-select:none;';
     document.documentElement.appendChild(badge);
     badge.addEventListener('click', function () {
       if (!drag.moved) window.open(APP_URL, '_blank', 'noopener');
