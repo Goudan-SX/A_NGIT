@@ -149,10 +149,15 @@ def install(target: Path, *, port: str, root_password: str,
         log("升级 pip …")
         run([python, "-m", "pip", "install", "--upgrade", "pip"], target, log)
         log("安装依赖（首次需要联网，请耐心等待）…")
-        pip_cmd = [python, "-m", "pip", "install", "-r", str(target / "backend" / "requirements.txt")]
+        pip_base = [python, "-m", "pip", "install", "-r", str(target / "backend" / "requirements.txt")]
         if mirror:
-            pip_cmd += ["-i", MIRROR]
-        run(pip_cmd, target, log)
+            try:
+                run(pip_base + ["-i", MIRROR], target, log)
+            except RuntimeError:
+                log("镜像安装失败，改用官方 PyPI 重试 …")
+                run(pip_base, target, log)
+        else:
+            run(pip_base, target, log)
 
     log("初始化数据库与种子数据 …")
     run([python, str(target / "bootstrap.py")], target, log)
