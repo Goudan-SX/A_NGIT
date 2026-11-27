@@ -3527,3 +3527,76 @@ svg {
   gap: 8px;
   align-items: center;
 }
+
+/* ==================== IP 省份选择 ==================== */
+.region-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: 12px;
+}
+.region-picker__label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+.region-picker__input {
+  width: 130px;
+  padding: 5px 10px;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.region-picker__input:focus {
+  outline: none;
+  border-color: rgba(100, 160, 255, 0.6);
+}
+
+/* ==================== 反诈科普板块 ==================== */
+.science-block {
+  border: 1px solid rgba(100, 160, 255, 0.25);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: rgba(100, 160, 255, 0.06);
+}
+.science-block__overview {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 8px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.science-block__tip {
+  font-size: 13px;
+  margin: 3px 0;
+  color: rgba(255, 255, 255, 0.8);
+  padding-left: 4px;
+}
+.science-block__case {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-left: 3px solid rgba(100, 160, 255, 0.5);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 6px 6px 0;
+}
+.science-block__case strong {
+  font-size: 13px;
+  color: #8ab4f8;
+}
+.science-block__case p {
+  font-size: 12px;
+  margin: 4px 0 0;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+}
+.science-block__source {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.science-block__case em {
+  font-style: normal;
+  color: rgba(180, 210, 255, 0.7);
+}

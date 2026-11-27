@@ -440,6 +440,7 @@
     state.saved = false;
     setAnalyzing(false);
     renderAnalysis(result);
+    updateScienceByScore(Number(result.risk_score || 0), result.risk_label || '', (result.risk_types || []).join(','));
     setEngine('本地托盘', '来自桌面托盘的前台窗口监测');
     setGuard('托盘监测中', true);
   }
@@ -1734,12 +1735,29 @@
 
   function loadKnowledge() {
     API.get('/api/knowledge').then(function (data) {
-      if (data.items && data.items.length) {
-        knowledgeItems = data.items;
-        renderKnowledge(knowledgeItems);
-      } else {
-        renderKnowledge(FALLBACK_KNOWLEDGE);
-      }
+      var baseItems = (data.items && data.items.length) ? data.items : FALLBACK_KNOWLEDGE;
+      knowledgeItems = baseItems.slice();
+      // 拓展：从案例库加载各类型科普，合并为知识卡片
+      API.get('/api/case-library/categories').then(function (catData) {
+        var cats = (catData.items || []).slice(0, 8);
+        var pending = cats.length;
+        if (!pending) { renderKnowledge(knowledgeItems); return; }
+        cats.forEach(function (cat) {
+          API.get('/api/case-library/science?category=' + encodeURIComponent(cat.name)).then(function (s) {
+            var sc = s.item || {};
+            if (sc.overview) {
+              knowledgeItems.push({
+                title: cat.name + '（' + cat.count + ' 例真实案例）',
+                category: cat.name,
+                content: sc.overview,
+                tags: (sc.prevention || []).join('；')
+              });
+            }
+            pending--;
+            if (pending <= 0) renderKnowledge(knowledgeItems);
+          }).catch(function () { pending--; if (pending <= 0) renderKnowledge(knowledgeItems); });
+        });
+      }).catch(function () { renderKnowledge(knowledgeItems); });
     }).catch(function () {
       renderKnowledge(FALLBACK_KNOWLEDGE);
     });
@@ -1793,46 +1811,130 @@
 
   var dailyIndex = 0;
 
-  function renderDaily() {
-    var item = DAILY_CASES[dailyIndex];
-    if (!item) return;
-    setText($('daily-region'), item.region);
-    setText($('daily-type'), item.type);
-    setText($('daily-date'), item.date);
-    setText($('daily-title-text'), item.title);
-    setText($('daily-story'), item.story);
-    setText($('daily-tips-text'), item.tips);
-    var steps = $('daily-steps');
-    if (steps) {
-      steps.innerHTML = '';
-      item.steps.forEach(function (step) {
-        var li = document.createElement('li');
-        li.textContent = step;
-        steps.appendChild(li);
+  /* ------------------------------------------------------------------------
+   * 六-B、IP 省份选择 / 本地速览滚动 / 反诈科普板块
+   * ---------------------------------------------------------------------- */
+  var currentProvince = '';
+  var briefTimer = null;
+  var briefTick = 0;
+  var briefTips = [];
+  var briefProvinceCases = [];
+
+  function initRegionPicker() {
+    var input = $('region-select');
+    var list = $('province-list');
+    if (!input || !list) return;
+    API.get('/api/case-library/provinces').then(function (data) {
+      (data.items || []).forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.name;
+        list.appendChild(opt);
       });
-    }
-    setText($('daily-counter'), '第 ' + (dailyIndex + 1) + ' / ' + DAILY_CASES.length + ' 例');
+    }).catch(function () {});
+    var saved = localStorage.getItem('guardian_province');
+    if (saved) { input.value = saved; currentProvince = saved; }
+    input.addEventListener('change', function () {
+      currentProvince = input.value.trim();
+      localStorage.setItem('guardian_province', currentProvince);
+      briefTick = 0;
+      loadBriefData();
+      updateScienceByScore(0, '', '');
+    });
   }
 
-  function bindDaily() {
-    var next = $('daily-next');
-    if (next) {
-      next.addEventListener('click', function () {
-        dailyIndex = (dailyIndex + 1) % DAILY_CASES.length;
-        renderDaily();
-      });
+  function loadBriefData() {
+    API.get('/api/case-library/tips').then(function (data) {
+      briefTips = data.items || [];
+    }).catch(function () { briefTips = []; });
+    if (currentProvince) {
+      API.get('/api/case-library/cases?province=' + encodeURIComponent(currentProvince) + '&limit=20').then(function (data) {
+        briefProvinceCases = data.items || [];
+      }).catch(function () { briefProvinceCases = []; });
+    } else {
+      briefProvinceCases = [];
     }
-    var now = new Date();
-    var start = new Date(now.getFullYear(), 0, 1);
-    var day = Math.floor((now - start) / 86400000);
-    dailyIndex = day % DAILY_CASES.length;
-    renderDaily();
+  }
+
+  function rotateBrief() {
+    briefTick++;
+    var title = $('local-brief-title');
+    var content = $('local-brief-content');
+    if (!title || !content) return;
+    if (currentProvince && briefProvinceCases.length && briefTick % 2 === 0) {
+      var c = briefProvinceCases[Math.floor(Math.random() * briefProvinceCases.length)];
+      title.textContent = currentProvince + ' · 真实案例';
+      content.innerHTML = '<strong>' + (c.scam_type || c.category || '') + '</strong>：' +
+        (c.method || '').slice(0, 80) + ' <em>来源：' + (c.source || '').slice(0, 30) + '</em>';
+    } else if (briefTips.length) {
+      var tip = briefTips[Math.floor(Math.random() * briefTips.length)];
+      title.textContent = '反诈小知识';
+      content.textContent = tip;
+    } else {
+      title.textContent = '反诈小知识';
+      content.textContent = '验证码是最后一道防线，任何索要验证码的人都是骗子。';
+    }
+  }
+
+  function initLocalBrief() {
+    loadBriefData();
+    rotateBrief();
+    if (briefTimer) clearInterval(briefTimer);
+    briefTimer = setInterval(rotateBrief, 6000);
+  }
+
+  function renderScience(item) {
+    var overview = $('science-overview');
+    var cases = $('science-cases');
+    var count = $('science-count');
+    if (!overview || !cases) return;
+    if (item) {
+      setText(count, item.category + ' · ' + item.case_count + ' 例');
+      overview.innerHTML = '<strong>' + item.category + '</strong>：' + item.overview;
+      var html = '';
+      (item.prevention || []).forEach(function (p) {
+        html += '<p class="science-block__tip">· ' + p + '</p>';
+      });
+      (item.cases || []).forEach(function (c) {
+        html += '<div class="science-block__case"><strong>' + (c.scam_type || '') +
+          '</strong>（' + (c.region || '') + '）<p>' + (c.method || '').slice(0, 120) +
+          '</p><p class="science-block__source">损失：' + (c.loss || '未明') +
+          ' · 来源：' + (c.source || '').slice(0, 40) + '</p></div>';
+      });
+      cases.innerHTML = html;
+    } else {
+      setText(count, '案例库');
+      overview.textContent = '未检测时随机展示真实案例；检测到疑似诈骗（≥70%）时展示对应类型科普与案例。';
+      cases.innerHTML = '';
+    }
+  }
+
+  function updateScienceByScore(score, riskLabel, scamType) {
+    if (score >= 70) {
+      var url = '/api/case-library/science/match?score=' + score +
+        '&risk_label=' + encodeURIComponent(riskLabel || '') +
+        '&scam_type=' + encodeURIComponent(scamType || '');
+      API.get(url).then(function (data) {
+        renderScience(data.item);
+      }).catch(function () {});
+    } else {
+      API.get('/api/case-library/random').then(function (data) {
+        if (data.item && data.item.category) {
+          API.get('/api/case-library/science?category=' + encodeURIComponent(data.item.category)).then(function (s) {
+            renderScience(s.item);
+          }).catch(function () {});
+        }
+      }).catch(function () {});
+    }
+  }
+
+  function initScienceBlock() {
+    updateScienceByScore(0, '', '');
   }
 
   /* ------------------------------------------------------------------------
    * 七、反诈问答
    * ---------------------------------------------------------------------- */
-  var QUESTIONS = [
+  var _FALLBACK_QUESTIONS = [
     {
       q: '陌生来电自称客服，说你开通了“直播会员 / 百万保障”，不取消就会自动扣费，并让你下载会议软件、开启屏幕共享。正确做法是？',
       options: ['按对方指引下载软件并共享屏幕，尽快取消业务', '挂断电话，通过官方客服渠道核实，绝不开启屏幕共享', '添加对方微信，按提示一步步操作'],
@@ -1865,10 +1967,24 @@
     }
   ];
 
-  var answers = new Array(QUESTIONS.length).fill(null);
+  var quizQuestions = _FALLBACK_QUESTIONS;
+  var quizAnswers = new Array(quizQuestions.length).fill(null);
+
+  function loadQuiz() {
+    API.get('/api/case-library/quiz?count=5').then(function (data) {
+      quizQuestions = (data.items || []).map(function (q) {
+        return { q: q.question, options: q.options, answer: q.answer, explain: q.explanation };
+      });
+      if (!quizQuestions.length) quizQuestions = _FALLBACK_QUESTIONS;
+      quizAnswers = new Array(quizQuestions.length).fill(null);
+      var result = $('quiz-result');
+      if (result) result.hidden = true;
+      renderQuiz();
+    }).catch(function () {});
+  }
 
   function answeredCount() {
-    return answers.filter(function (item) { return item !== null; }).length;
+    return quizAnswers.filter(function (item) { return item !== null; }).length;
   }
 
   function renderQuiz() {
@@ -1879,7 +1995,7 @@
     list.innerHTML = '';
     if (result) result.hidden = true;
 
-    QUESTIONS.forEach(function (item, qi) {
+    quizQuestions.forEach(function (item, qi) {
       var block = document.createElement('div');
       block.className = 'quiz-question';
 
@@ -1902,14 +2018,14 @@
         btn.appendChild(mark);
         btn.appendChild(content);
 
-        if (answers[qi] !== null) {
+        if (quizAnswers[qi] !== null) {
           btn.disabled = true;
           if (oi === item.answer) btn.classList.add('quiz-option--correct');
-          else if (oi === answers[qi]) btn.classList.add('quiz-option--wrong');
+          else if (oi === quizAnswers[qi]) btn.classList.add('quiz-option--wrong');
         } else {
           btn.addEventListener('click', function () {
-            if (answers[qi] !== null) return;
-            answers[qi] = oi;
+            if (quizAnswers[qi] !== null) return;
+            quizAnswers[qi] = oi;
             renderQuiz();
             checkQuizDone();
           });
@@ -1920,25 +2036,25 @@
 
       var feedback = document.createElement('p');
       feedback.className = 'quiz-feedback';
-      if (answers[qi] !== null) {
-        var ok = answers[qi] === item.answer;
+      if (quizAnswers[qi] !== null) {
+        var ok = quizAnswers[qi] === item.answer;
         feedback.classList.add('quiz-feedback--show', ok ? 'quiz-feedback--ok' : 'quiz-feedback--no');
         feedback.textContent = (ok ? '回答正确。' : '回答不正确。') + item.explain;
       }
       block.appendChild(feedback);
       list.appendChild(block);
     });
-    setText(progress, '已答 ' + answeredCount() + ' / ' + QUESTIONS.length + ' 题');
+    setText(progress, '已答 ' + answeredCount() + ' / ' + quizQuestions.length + ' 题');
   }
 
   function checkQuizDone() {
-    if (answeredCount() !== QUESTIONS.length) return;
-    var correct = answers.filter(function (answer, index) {
-      return answer === QUESTIONS[index].answer;
+    if (answeredCount() !== quizQuestions.length) return;
+    var correct = quizAnswers.filter(function (answer, index) {
+      return answer === quizQuestions[index].answer;
     }).length;
-    var percent = Math.round((correct / QUESTIONS.length) * 100);
-    setText($('quiz-score'), correct + ' / ' + QUESTIONS.length + ' 题 · ' + percent + ' 分');
-    if (correct === QUESTIONS.length) {
+    var percent = Math.round((correct / quizQuestions.length) * 100);
+    setText($('quiz-score'), correct + ' / ' + quizQuestions.length + ' 题 · ' + percent + ' 分');
+    if (correct === quizQuestions.length) {
       setText($('quiz-level'), '反诈达人');
       setText($('quiz-desc'), '全部答对，防骗意识很强！继续保持，也把这些要点分享给家人和同学。');
     } else if (correct >= 3) {
@@ -1956,11 +2072,10 @@
     var restart = $('quiz-restart');
     if (restart) {
       restart.addEventListener('click', function () {
-        answers = new Array(QUESTIONS.length).fill(null);
-        renderQuiz();
+        loadQuiz();
       });
     }
-    renderQuiz();
+    loadQuiz();
   }
 
   /* ------------------------------------------------------------------------
@@ -2135,7 +2250,9 @@
     bindModals();
     bindContractControls();
     bindMonitorSync();
-    bindDaily();
+    initRegionPicker();
+    initLocalBrief();
+    initScienceBlock();
     bindQuiz();
     renderKnowledge(FALLBACK_KNOWLEDGE);
     loadKnowledge();

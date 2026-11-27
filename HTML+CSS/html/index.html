@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
   <title>反诈卫士 · Guardian-AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.4.2" />
+  <link rel="stylesheet" href="../css/style.css?v=1.5.0" />
 </head>
 
 <body>
@@ -31,11 +31,17 @@
       <nav class="site-nav" aria-label="主导航">
         <a class="site-nav__link site-nav__link--active" href="#monitor" data-view-link="monitor" aria-current="page">AI 管家</a>
         <a class="site-nav__link" href="#contacts" data-view-link="contacts">对话用户</a>
-        <a class="site-nav__link" href="#daily" data-view-link="daily">每日一反诈</a>
         <a class="site-nav__link" href="#quiz" data-view-link="quiz">反诈问答</a>
         <a class="site-nav__link" href="#knowledge" data-view-link="knowledge">知识宣传</a>
         <a class="site-nav__link" href="#images" data-view-link="images">图片采集</a>
       </nav>
+
+      <div class="region-picker" id="region-picker">
+        <label class="region-picker__label" for="region-select">所在地</label>
+        <input class="region-picker__input" id="region-select" list="province-list"
+          placeholder="选择/输入省份" autocomplete="off" />
+        <datalist id="province-list"></datalist>
+      </div>
 
       <p class="guard-status" id="guard-status">
         <span class="guard-status__dot" aria-hidden="true"></span>
@@ -50,12 +56,9 @@
       <div class="local-brief__main">
         <p class="local-brief__title">
           <span class="local-brief__badge">本地速览</span>
-          近期电诈风险提示
+          <span id="local-brief-title">反诈小知识</span>
         </p>
-        <p class="local-brief__desc">
-          近期高发：<strong>兼职刷单、机票退改签理赔、冒充客服退款、虚假投资理财、屏幕共享类涉诈 APP</strong>；
-          重点防范人群：在校学生、中老年及独居居民。
-        </p>
+        <p class="local-brief__desc" id="local-brief-content">正在加载反诈小知识…</p>
       </div>
       <ul class="local-brief__channels" aria-label="预警与求助渠道">
         <li>国家反诈中心 APP · 开启来电预警</li>
@@ -136,7 +139,7 @@
               </span>
               <span class="uploader__text">
                 <strong>拖拽、粘贴聊天截图或录音</strong>
-                <small>图片 ≤ 10 MB · 语音 ≤ 25 MB · DeepSeek V4.1 优先</small>
+                <small>图片 ≤ 10 MB · 语音 ≤ 25 MB</small>
               </span>
               <span class="uploader__action" aria-hidden="true">选择文件</span>
             </div>
@@ -150,9 +153,6 @@
             </div>
 
             <div class="media-grid" id="media-grid"></div>
-            <p class="field-note" id="media-note">
-              图片优先使用 DeepSeek V4.1 视觉，Qwen-VL / Windows OCR 兜底；语音优先使用 Qwen-ASR 转写。
-            </p>
           </div>
         </section>
 
@@ -198,10 +198,16 @@
             </div>
           </div>
 
-          <p class="match-badge is-hidden" id="match-badge">
-            <span class="match-badge__dot" aria-hidden="true"></span>
-            <span id="match-badge-text">等待检测</span>
-          </p>
+          <section class="analysis-block science-block" id="science-block" aria-labelledby="science-title">
+            <div class="analysis-block__head">
+              <h3 class="analysis-block__title" id="science-title">反诈科普</h3>
+              <span class="analysis-block__count" id="science-count">案例库</span>
+            </div>
+            <div id="science-content">
+              <p class="science-block__overview" id="science-overview">未检测时随机展示真实案例；检测到疑似诈骗（≥70%）时展示对应类型科普与案例。</p>
+              <div id="science-cases"></div>
+            </div>
+          </section>
 
           <section class="analysis-block" aria-labelledby="contract-title">
             <div class="analysis-block__head">
@@ -331,73 +337,6 @@
               <li class="empty-inline">检测后给出针对性处置建议</li>
             </ol>
           </section>
-        </aside>
-      </div>
-    </section>
-
-    <!-- ==================== 视图二：每日一反诈 ==================== -->
-    <section class="view" id="view-daily" aria-labelledby="daily-title">
-      <div class="page-head">
-        <div class="page-head__heading">
-          <p class="panel__eyebrow">每日一反诈</p>
-          <h2 class="panel__title" id="daily-title">今日最新反诈案例</h2>
-        </div>
-        <p class="chip chip--ai">
-          <span class="chip__dot" aria-hidden="true"></span>
-          每日推送 · 本地通报 + 全国案例
-        </p>
-      </div>
-
-      <div class="daily-layout">
-        <article class="panel daily-card" id="daily-card" aria-live="polite">
-          <div class="daily-card__meta">
-            <span class="tag tag--danger" id="daily-region">本地预警</span>
-            <span class="tag tag--neutral" id="daily-type">机票退改签理赔诈骗</span>
-            <span class="daily-card__date" id="daily-date">近期通报</span>
-          </div>
-          <h3 class="daily-card__title" id="daily-title-text"></h3>
-
-          <div class="daily-card__section">
-            <h4 class="daily-card__subtitle">案情经过</h4>
-            <p class="daily-card__text" id="daily-story"></p>
-          </div>
-
-          <div class="daily-card__section">
-            <h4 class="daily-card__subtitle">套路拆解</h4>
-            <ol class="daily-steps" id="daily-steps"></ol>
-          </div>
-
-          <div class="daily-card__tips" id="daily-tips">
-            <strong>警方提示：</strong>
-            <span id="daily-tips-text"></span>
-          </div>
-
-          <div class="daily-card__actions">
-            <button class="btn btn--primary" type="button" id="daily-next">换一例</button>
-            <span class="daily-card__counter" id="daily-counter"></span>
-          </div>
-        </article>
-
-        <aside class="panel daily-side">
-          <h3 class="panel__title daily-side__title">近期同类套路提醒</h3>
-          <ul class="side-list">
-            <li class="side-list__item">
-              <strong>会议类 APP</strong>
-              <p>凡是陌生来电让下载“会议/投屏/云通话”软件并开启屏幕共享，均为高危操作。</p>
-            </li>
-            <li class="side-list__item">
-              <strong>理赔类话术</strong>
-              <p>航班延误、快递丢件、商品质量问题理赔，只在官方平台核实，不点短信链接。</p>
-            </li>
-            <li class="side-list__item">
-              <strong>学生兼职陷阱</strong>
-              <p>“日赚数百、足不出户”的刷单兼职均为骗局，不垫付、不充值、不下载陌生 APP。</p>
-            </li>
-            <li class="side-list__item side-list__item--warn">
-              <strong>遇到可疑情况</strong>
-              <p>立即停止转账与屏幕共享，保留聊天记录，拨打 96110 咨询或 110 报警。</p>
-            </li>
-          </ul>
         </aside>
       </div>
     </section>
@@ -613,7 +552,7 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.4.2"></script>
-  <script src="../js/app.js?v=1.4.2"></script>
+  <script src="../js/api.js?v=1.5.0"></script>
+  <script src="../js/app.js?v=1.5.0"></script>
 </body>
 </html>

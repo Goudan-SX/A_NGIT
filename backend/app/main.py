@@ -29,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from . import (ai_common, ai_policy, analyzer, case_matcher, config, content_store, db, deepseek,
+from . import (ai_common, ai_policy, analyzer, case_library, case_matcher, config, content_store, db, deepseek,
                conversation_store, guardian, monitor_state, ocr, qwen, repository, result_cache, security, transaction_risk)
 from .text_normalize import preprocess_text
 
@@ -397,6 +397,57 @@ def api_guardian_cases(
         return {"ok": True, "items": guardian.list_cases(province=province, category=category, limit=limit)}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"读取分省案例失败：{exc}") from exc
+
+
+# ==================== 真实案例库（CSV 411 条青少年被骗案例） ====================
+
+@app.get("/api/case-library/categories")
+def api_cl_categories() -> dict[str, Any]:
+    return {"ok": True, "items": case_library.list_categories()}
+
+
+@app.get("/api/case-library/provinces")
+def api_cl_provinces() -> dict[str, Any]:
+    return {"ok": True, "items": case_library.list_provinces()}
+
+
+@app.get("/api/case-library/cases")
+def api_cl_cases(
+    province: str = "",
+    category: str = "",
+    limit: int = Query(20, ge=1, le=100),
+) -> dict[str, Any]:
+    return {"ok": True, "items": case_library.list_cases(province=province, category=category, limit=limit)}
+
+
+@app.get("/api/case-library/random")
+def api_cl_random(province: str = "") -> dict[str, Any]:
+    return {"ok": True, "item": case_library.random_case(province=province)}
+
+
+@app.get("/api/case-library/science")
+def api_cl_science(category: str = "") -> dict[str, Any]:
+    return {"ok": True, "item": case_library.get_science(category=category)}
+
+
+@app.get("/api/case-library/science/match")
+def api_cl_science_match(
+    risk_label: str = "",
+    scam_type: str = "",
+    score: int = Query(0, ge=0, le=100),
+) -> dict[str, Any]:
+    """根据检测结果匹配科普内容（疑似度≥70 按类型展示，否则随机）。"""
+    return {"ok": True, "item": case_library.match_science_by_text(risk_label, scam_type, score)}
+
+
+@app.get("/api/case-library/tips")
+def api_cl_tips(count: int = Query(0, ge=0, le=50)) -> dict[str, Any]:
+    return {"ok": True, "items": case_library.list_tips(count=count)}
+
+
+@app.get("/api/case-library/quiz")
+def api_cl_quiz(count: int = Query(5, ge=1, le=10)) -> dict[str, Any]:
+    return {"ok": True, "items": case_library.list_quiz(count=count)}
 
 
 @app.get("/api/stats")
