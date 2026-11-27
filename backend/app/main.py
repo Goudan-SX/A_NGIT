@@ -28,7 +28,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from . import (ai_common, ai_policy, analyzer, case_matcher, config, content_store, db, deepseek,
-               guardian, ocr, qwen, repository, result_cache, security, transaction_risk)
+               guardian, monitor_state, ocr, qwen, repository, result_cache, security, transaction_risk)
 from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
@@ -125,6 +125,13 @@ class TextAnalyzeRequest(BaseModel):
     text: str = Field(default="", max_length=20000)
     save: bool = True
     client_id: str = Field(default="anonymous", max_length=64)
+
+
+class MonitorPublishRequest(BaseModel):
+    text: str = Field(default="", max_length=20000)
+    result: dict[str, Any] = Field(default_factory=dict)
+    source: str = Field(default="tray", max_length=40)
+    window: str = Field(default="", max_length=120)
     fast: bool = False
 
 
@@ -556,6 +563,23 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
     result["engine"]["note"] = result["engine"].get("note", "Guardian-AI 语义精判")
     result_cache.text_cache.set(cache_key, {"result": result, "match": match})
     return result, match
+
+
+@app.post("/api/monitor/publish")
+def api_monitor_publish(payload: MonitorPublishRequest) -> dict[str, Any]:
+    safe_text = analyzer.mask_text(payload.text, payload.result)
+    item = monitor_state.publish(
+        text=safe_text,
+        result=payload.result,
+        source=payload.source,
+        window=payload.window,
+    )
+    return {"ok": True, "item": item}
+
+
+@app.get("/api/monitor/latest")
+def api_monitor_latest() -> dict[str, Any]:
+    return {"ok": True, "item": monitor_state.latest()}
 
 
 @app.post("/api/analyze/text")

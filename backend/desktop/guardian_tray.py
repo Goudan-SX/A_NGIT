@@ -241,6 +241,30 @@ def analyze(text: str) -> dict | None:
         return None
 
 
+def publish_result(text: str, result: dict, window_title: str) -> None:
+    token = security.get_local_token()
+    payload = json.dumps({
+        "text": text,
+        "result": result,
+        "source": "tray",
+        "window": window_title[:120],
+    }).encode("utf-8")
+    request = Request(
+        API_BASE + "/api/monitor/publish",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "X-Guardian-Token": token,
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=10):
+            pass
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def record_alert(window_title: str, result: dict) -> None:
     try:
         QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -290,6 +314,7 @@ def tick() -> None:
     if not data or not data.get("analysis"):
         return
     result = data["analysis"]
+    publish_result(text, result, title)
     score = int(result.get("risk_score", 0))
     if score >= 70:
         key = digest[:16]

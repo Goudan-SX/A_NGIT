@@ -401,6 +401,60 @@
     });
   }
 
+
+  var lastMonitorId = '';
+
+  function applyMonitorItem(item) {
+    if (!item) return;
+    var result = item.result || {};
+    var score = Number(result.risk_score || 0);
+    var text = $('monitor-sync-text');
+    if (text) {
+      text.textContent = (item.window || '前台窗口') + ' · ' + score + '% · ' + (item.updated_at || '');
+    }
+    var toggle = $('monitor-sync-toggle');
+    if (!toggle || !toggle.checked) return;
+    if (document.activeElement === $('chat-text')) return;
+    if (item.id && item.id === lastMonitorId) return;
+    lastMonitorId = item.id || '';
+    var input = $('chat-text');
+    if (input) {
+      input.value = item.text || '';
+      updateChatStats();
+    }
+    // 托盘结果优先：让当前在途的手动分析失效，避免旧请求把 89% 覆盖成“—”。
+    state.analyzeSeq += 1;
+    state.monitorAt = Date.now();
+    state.analysis = result;
+    state.analysisId = null;
+    state.saved = false;
+    setAnalyzing(false);
+    renderAnalysis(result);
+    setEngine('本地托盘', '来自桌面托盘的前台窗口监测');
+    setGuard('托盘监测中', true);
+  }
+
+  function pollMonitor() {
+    if (document.hidden) return;
+    API.get('/api/monitor/latest').then(function (data) {
+      if (data && data.item) applyMonitorItem(data.item);
+    }).catch(function () { /* 托盘未启动或令牌失效时静默 */ });
+  }
+
+  function bindMonitorSync() {
+    var toggle = $('monitor-sync-toggle');
+    if (toggle) {
+      toggle.addEventListener('change', function () {
+        if (toggle.checked) {
+          lastMonitorId = '';
+          pollMonitor();
+        }
+      });
+    }
+    pollMonitor();
+    setInterval(pollMonitor, 2500);
+  }
+
   function bindContractControls() {
     var filter = $('contract-filter');
     var hide = $('hide-markers');
@@ -450,6 +504,7 @@
 
   function renderFallback() {
     // 后端不可用时只展示明确错误态，不伪造分数、命中或证据。
+    if (state.monitorAt && Date.now() - state.monitorAt < 10000 && state.analysis) return;
     state.analysis = null;
     state.analysisId = null;
     state.saved = false;
@@ -1952,6 +2007,7 @@
     bindActions();
     bindModals();
     bindContractControls();
+    bindMonitorSync();
     bindDaily();
     bindQuiz();
     renderKnowledge(FALLBACK_KNOWLEDGE);
