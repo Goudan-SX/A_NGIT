@@ -77,13 +77,22 @@ def copy_project(target: Path, log) -> None:
     log(f"已复制 {count} 个文件到 {target}")
 
 
-def write_env(target: Path, port: str, deepseek: str, qwen: str, root_password: str, log) -> None:
-    template = (target / ".env.example").read_text(encoding="utf-8")
+def write_env(target: Path, port: str, root_password: str, log) -> None:
+    env_path = target / ".env"
+    if env_path.exists():
+        template = env_path.read_text(encoding="utf-8")
+        backup = env_path.with_name(f".env.bak.{secrets.token_hex(3)}")
+        shutil.copy2(env_path, backup)
+        log(f"已备份原 .env -> {backup.name}")
+        match = re.search(r"^ROOT_PASSWORD=(.*)$", template, flags=re.MULTILINE)
+        if match and match.group(1).strip():
+            root_password = match.group(1).strip()
+            log("检测到已有 .env，保留原 root 密码与 AI 配置")
+    else:
+        template = (target / ".env.example").read_text(encoding="utf-8")
     values = {
         "APP_HOST": "127.0.0.1",
         "APP_PORT": port,
-        "DEEPSEEK_API_KEY": deepseek,
-        "QWEN_API_KEY": qwen,
         "ROOT_PASSWORD": root_password,
     }
     for key, value in values.items():
@@ -92,13 +101,8 @@ def write_env(target: Path, port: str, deepseek: str, qwen: str, root_password: 
             template = re.sub(rf"^{re.escape(key)}=.*$", lambda _m: line, template, flags=re.MULTILINE)
         else:
             template = template.rstrip() + "\n" + line + "\n"
-    env_path = target / ".env"
-    if env_path.exists():
-        backup = env_path.with_name(f".env.bak.{secrets.token_hex(3)}")
-        shutil.copy2(env_path, backup)
-        log(f"已备份原 .env -> {backup.name}")
     env_path.write_text(template, encoding="utf-8")
-    log("已写入 .env 配置")
+    log("已写入 .env 配置（AI Key 留空，登录后在网页 API 页配置）")
 
 
 def run(cmd, cwd: Path, log) -> None:
@@ -124,14 +128,14 @@ def run(cmd, cwd: Path, log) -> None:
         raise RuntimeError(f"命令失败（退出码 {code}）：{' '.join(str(x) for x in cmd)}")
 
 
-def install(target: Path, *, port: str, deepseek: str, qwen: str, root_password: str,
+def install(target: Path, *, port: str, root_password: str,
             mirror: bool, shortcut: bool, start: bool, skip_deps: bool, log) -> None:
     target = target.resolve()
     log("=" * 52)
     log("Guardian-AI 安装开始")
     log(f"安装目录：{target}")
     copy_project(target, log)
-    write_env(target, port, deepseek, qwen, root_password, log)
+    write_env(target, port, root_password, log)
 
     venv = target / ".venv"
     if skip_deps:
@@ -185,8 +189,6 @@ def console_install(args) -> int:
     install(
         target,
         port=str(port),
-        deepseek=args.deepseek_key,
-        qwen=args.qwen_key,
         root_password=root_password,
         mirror=not args.no_mirror,
         shortcut=not args.no_shortcut,
@@ -203,13 +205,11 @@ def gui_install() -> int:
 
     root = tk.Tk()
     root.title("Guardian-AI 安装程序")
-    root.geometry("760x700")
-    root.minsize(700, 640)
+    root.geometry("760x650")
+    root.minsize(700, 600)
 
     path_var = tk.StringVar(value=str(default_target()))
     port_var = tk.StringVar(value="8000")
-    deepseek_var = tk.StringVar()
-    qwen_var = tk.StringVar()
     root_pwd_var = tk.StringVar(value=secrets.token_urlsafe(12))
     mirror_var = tk.BooleanVar(value=True)
     shortcut_var = tk.BooleanVar(value=True)
@@ -232,27 +232,27 @@ def gui_install() -> int:
         filedialog.askdirectory(initialdir=str(Path(path_var.get()).parent)) or path_var.get()
     )).grid(row=0, column=2, padx=(8, 0))
     row(1, "服务端口", ttk.Entry(frm, textvariable=port_var))
-    row(2, "DeepSeek Key（可选）", ttk.Entry(frm, textvariable=deepseek_var))
-    row(3, "Qwen Key（可选）", ttk.Entry(frm, textvariable=qwen_var))
-    row(4, "root 初始密码", ttk.Entry(frm, textvariable=root_pwd_var))
+    row(2, "root 初始密码", ttk.Entry(frm, textvariable=root_pwd_var))
+    ttk.Label(frm, text="AI 接口（DeepSeek / OpenAI 兼容）在安装完成后登录网页，在 API 页配置。",
+              foreground="#64748b").grid(row=3, column=1, sticky="w", pady=(2, 6))
     ttk.Checkbutton(frm, text="使用国内 PyPI 镜像（推荐）", variable=mirror_var).grid(
-        row=5, column=1, sticky="w", pady=3)
+        row=4, column=1, sticky="w", pady=3)
     ttk.Checkbutton(frm, text="创建桌面和开始菜单快捷方式", variable=shortcut_var).grid(
-        row=6, column=1, sticky="w", pady=3)
+        row=5, column=1, sticky="w", pady=3)
     ttk.Checkbutton(frm, text="安装完成后启动 Guardian-AI", variable=start_var).grid(
-        row=7, column=1, sticky="w", pady=3)
+        row=6, column=1, sticky="w", pady=3)
 
     status = ttk.Label(frm, textvariable=status_var)
-    status.grid(row=8, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    status.grid(row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
     install_btn = ttk.Button(frm, text="开始安装")
-    install_btn.grid(row=8, column=3, sticky="e", pady=(8, 0))
+    install_btn.grid(row=7, column=3, sticky="e", pady=(8, 0))
 
-    ttk.Label(frm, text="安装日志").grid(row=9, column=0, columnspan=3, sticky="w", pady=(10, 4))
-    log_text = tk.Text(frm, height=9, wrap="word", state="disabled")
-    log_text.grid(row=10, column=0, columnspan=3, sticky="nsew")
-    frm.rowconfigure(10, weight=1)
+    ttk.Label(frm, text="安装日志").grid(row=8, column=0, columnspan=3, sticky="w", pady=(10, 4))
+    log_text = tk.Text(frm, height=10, wrap="word", state="disabled")
+    log_text.grid(row=9, column=0, columnspan=3, sticky="nsew")
+    frm.rowconfigure(9, weight=1)
     scroll = ttk.Scrollbar(frm, orient="vertical", command=log_text.yview)
-    scroll.grid(row=10, column=3, sticky="ns")
+    scroll.grid(row=9, column=3, sticky="ns")
     log_text.configure(yscrollcommand=scroll.set)
 
     def append_log(line: str) -> None:
@@ -313,8 +313,6 @@ def gui_install() -> int:
         log_text.configure(state="disabled")
         params = dict(
             port=str(port),
-            deepseek=deepseek_var.get().strip(),
-            qwen=qwen_var.get().strip(),
             root_password=pwd,
             mirror=mirror_var.get(),
             shortcut=shortcut_var.get(),
@@ -358,8 +356,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Guardian-AI 安装器")
     parser.add_argument("--path", help="安装目录（提供后使用命令行模式）")
     parser.add_argument("--port", default="8000")
-    parser.add_argument("--deepseek-key", default="")
-    parser.add_argument("--qwen-key", default="")
     parser.add_argument("--root-password", default="")
     parser.add_argument("--yes", action="store_true")
     parser.add_argument("--no-mirror", action="store_true")

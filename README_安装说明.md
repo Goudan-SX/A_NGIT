@@ -21,7 +21,6 @@ Guardian-AI 是一个本地运行的 Web + FastAPI 后端反诈识别系统，�
 3. 选择安装目录：默认 D:\Guardian-AI，可点“浏览…”安装到其他盘或目录。
 4. 按需填写：
    - 服务端口（默认 8000）
-   - DeepSeek / Qwen Key（可留空，之后再配）
    - root 初始密码（已预填随机值）
    - 是否使用国内 PyPI 镜像、是否创建快捷方式、是否安装后启动
 5. 点击“开始安装”。安装器会自动：
@@ -41,17 +40,17 @@ Guardian-AI 是一个本地运行的 Web + FastAPI 后端反诈识别系统，�
 - 在 API 页填写任意 OpenAI 兼容接口（地址、Key、模型），自动同步并测试。
 - 在个人信息中可查看用户 ID 与数据键（如 u1001:root）。
 
-## 四、配置 AI（可选）
+## 四、配置 AI
 
-编辑项目根目录的 .env：
+安装完成后打开网页，登录账号，在 **API** 页填写任意 OpenAI 兼容接口（地址、Key、模型），保存后自动同步并测试；配置按用户保存在本地数据库，下次登录自动恢复。
+
+安装器不会收集 AI Key。高级用户也可以编辑项目根目录 .env，配置 DeepSeek/Qwen 作为默认兜底：
 
 DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-flash
 
-QWEN_API_KEY=
-
-不配置也能使用本地规则引擎与 Windows OCR。修改后重启程序。
+不配置也能使用本地规则引擎与 Windows OCR。
 
 ## 五、数据位置
 
