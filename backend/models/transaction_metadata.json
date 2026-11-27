@@ -1,5 +1,5 @@
 {
-  "model_name": "LightGBM-IndianFinancialFraud",
+  "model_name": "Guardian-AI-Transaction",
   "trained_at": "2026-11-27 19:46:47",
   "rows": 250000,
   "fraud_rows": 13473,

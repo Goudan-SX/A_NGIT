@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
-  <title>反诈卫士 · AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.1.7" />
+  <title>反诈卫士 · Guardian-AI 诈骗识别与个人信息保护助手</title>
+  <link rel="stylesheet" href="../css/style.css?v=1.2.1" />
 </head>
 
 <body>
@@ -24,7 +24,7 @@
         </span>
         <span class="brand__text">
           <span class="brand__name">反诈卫士</span>
-          <span class="brand__slogan">AI 诈骗识别与个人信息保护助手</span>
+          <span class="brand__slogan">Guardian-AI · AI 诈骗识别与个人信息保护助手</span>
         </span>
       </a>
 
@@ -160,12 +160,12 @@
         <aside class="panel panel--analysis" aria-labelledby="analysis-title">
           <header class="panel__header">
             <div class="panel__heading">
-              <p class="panel__eyebrow">AI 研判</p>
+              <p class="panel__eyebrow">Guardian-AI 研判</p>
               <h2 class="panel__title" id="analysis-title">风险分析</h2>
             </div>
             <p class="chip chip--ai" id="engine-chip">
               <span class="chip__dot" aria-hidden="true"></span>
-              <span id="engine-chip-text">规则引擎 v1</span>
+              <span id="engine-chip-text">Guardian-AI</span>
             </p>
           </header>
 
@@ -213,7 +213,7 @@
 
           <section class="analysis-block" aria-labelledby="dimensions-title">
             <div class="analysis-block__head">
-              <h3 class="analysis-block__title" id="dimensions-title">评分维度</h3>
+              <h3 class="analysis-block__title" id="dimensions-title">Guardian-AI 评分</h3>
               <span class="analysis-block__count">满分 100</span>
             </div>
             <ul class="dimension-list" id="dimension-list">
@@ -223,6 +223,7 @@
                 <span class="dimension__score">0</span>
               </li>
             </ul>
+            <p class="field-note is-hidden" id="dimension-note"></p>
           </section>
 
           <section class="analysis-block" aria-labelledby="keywords-title">
@@ -417,6 +418,21 @@
 
       <div class="knowledge-grid" id="knowledge-grid"></div>
 
+      <section class="panel province-panel" aria-labelledby="province-cases-title">
+        <div class="province-panel__head">
+          <div>
+            <p class="panel__eyebrow">分省案例</p>
+            <h3 class="province-panel__title" id="province-cases-title">看看你所在省份的真实案例</h3>
+          </div>
+          <select class="form-select province-select" id="province-select" aria-label="选择省份">
+            <option value="">全部省份</option>
+          </select>
+        </div>
+        <div class="province-case-list" id="province-case-list">
+          <p class="empty-inline">正在读取分省案例…</p>
+        </div>
+      </section>
+
       <div class="knowledge-footer">
         <div class="panel principle-card">
           <h3 class="principle-card__title">牢记防骗“三不一多”</h3>
@@ -443,7 +459,7 @@
   <!-- ==================== 页脚 ==================== -->
   <footer class="site-footer">
     <p>赛题 11 · 反诈卫士 · 网络安全方向</p>
-    <p>Python + FastAPI + SQL Server · DeepSeek V4.1 + Qwen-ASR</p>
+    <p>Guardian-AI · Python + FastAPI + SQL Server · DeepSeek V4.1 + Qwen-ASR</p>
     <p class="site-footer__links">
       <a href="history.html">历史记录</a>
       <span aria-hidden="true">·</span>
@@ -528,7 +544,7 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.1.7"></script>
-  <script src="../js/app.js?v=1.1.7"></script>
+  <script src="../js/api.js?v=1.2.1"></script>
+  <script src="../js/app.js?v=1.2.1"></script>
 </body>
 </html>

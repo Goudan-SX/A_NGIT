@@ -1,0 +1,1472 @@
+[
+  {
+    "keyword": "刷单返利",
+    "category": "话术诱导",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "手机口",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "屏幕共享",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "验证码",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "冒充公检法",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "免费赠送游戏皮肤/装备诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "冒充公检法/律师/官员恐吓诈骗（含跨境假冒官员）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "冒充班主任/老师收费诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "追星/演唱会票务诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "注销校园贷/学生账户诈骗（冒充客服）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "游戏账号/装备交易诈骗（虚假平台/私下交易）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "游戏代练/代升级诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "刷单返利/兼职诈骗（含寄拍、任务折现变种）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "虚假中奖/抽奖诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "机票退改签诈骗（冒充客服理赔）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "网络婚恋交友诈骗（杀猪盘，含小额多次借款）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "解除防沉迷诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "虚假购物/二手交易诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "钓鱼链接诈骗（奖学金/补助类）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "不良校园贷",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "开启屏幕共享/视频会议",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "透露短信验证码",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "扫描陌生二维码/点击陌生链接",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "下载陌生APP/远程控制软件",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "向陌生人展示付款码/支付密码",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "购买电商充值卡/群内发红包变相转账",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "透露身份证/银行卡/家长账户信息",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "轻信伪造证件/截图（警官证、购票截图、官方文件）",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "涉诈关联犯罪（帮信罪：出租出售“两卡”、引流、跑分、手机口）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "冒充熟人诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "传销/虚假创业项目诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "出租/出售/出借银行卡、电话卡、账号（涉帮信风险）",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "点击陌生链接下载非官方APP",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "未经核实向“熟人”转账",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "寄拍/试衣员/模特兼职诈骗（刷单变种）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "裸聊敲诈勒索",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "冒充电商/快递客服理赔诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "培训机构退费诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "招生诈骗（花钱运作录取）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "境外高薪诱骗（电诈园区）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "直播公会合同诈骗",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "网红高额返利“赚钱项目",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "虚假投资理财诈骗（含冒充军人带单）",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "虚假补贴/中奖链接钓鱼",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "隔空猥亵+敲诈勒索",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "下载木马APP被窃取通讯录",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "共享屏幕",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "安全账户",
+    "category": "话术诱导",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "注销校园贷",
+    "category": "诈骗类型",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "远程控制",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "跑分",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "配合调查",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费送游戏皮肤",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费领皮肤",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费领取游戏皮肤",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "资金冻结",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "保证金",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "开启屏幕共享",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "操作失误",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "账号异常",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "保密",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "把验证码告诉我",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "账号被冻结",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "提供验证码",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "出示警官证",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "银行卡解冻",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "账户刷流水",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "事后加倍还款",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "我是警察",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "平台交易",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "你中奖了",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "刷单兼职",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "多刷多赚",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "系统故障",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "时间自由",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "轻松赚钱",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "充话费返利",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "高薪兼职",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "充值返利",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "需配合调查",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费领取蛋仔派对皮肤",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "赠送皮肤装备",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "商户被司法冻结6万",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "开屏幕共享",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "扫码付款后返还",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "说你妈妈的验证码",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费送游戏装备",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "开启屏幕共享配合操作",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "两部手机在家轻松做副业",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "日赚数百元",
+    "category": "话术关键词",
+    "weight": 10,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费领取游戏皮肤/装备/道具",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "你是未成年人，导致公司/平台账户被冻结",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "不配合就报警/告诉老师家长/上门抓人/父母坐牢",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "配合警方调查/洗清嫌疑/泄露明星隐私被立案",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "缴纳保证金/解冻金/验证费/案件验资",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "影响个人征信/注销学生账户/安全账户验证",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "内部渠道/百分百抢票/抢不到全额退款",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "刷单返利/轻松赚钱/日结兼职",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "代练/代升级能赚钱",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "中奖/抽奖/领红包（先付小钱解冻）",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "转账未备注需重转/未收到需再转",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "前N名缴费得品德卡",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "解除未成年人防沉迷限制",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "操作后钱款全部返还",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "杀猪盘精英人设/恋爱借钱剧本",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "高薪借卡/借号/线上推广”兼职",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "押金秒退”建立信任后大额索款/会员升级全额返还",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "已获取通讯录，转账删除视频",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "快递丢失理赔，屏幕共享核实",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "课程退费，先充值购买债券/基金抵退费",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "稳赚不赔/内部消息/平台漏洞",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "垫付",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "解冻金",
+    "category": "话术诱导",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "下载会议",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "两卡",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "征信",
+    "category": "话术诱导",
+    "weight": 8,
+    "source": "manual"
+  },
+  {
+    "keyword": "扫码",
+    "category": "风险行为",
+    "weight": 8,
+    "source": "manual"
+  },
+  {
+    "keyword": "411",
+    "category": "数据集总案例数",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "nan",
+    "category": "一、话术/关键词（按出现案例数排序，Top40）",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "使用家长手机支付",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "恐吓操控话术",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "中奖/福利诱饵",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "假冒公检法",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "钓鱼链接/二维码",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "解冻金/保证金话术",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费送皮肤",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "屏幕共享窃密",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "验证码泄露",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "个人信息泄露",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "熟人/人设信任利用",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "一般性轻信",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "私下/绕开平台交易",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "伪造截图",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "两卡/账户出借",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "刷单垫资",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "恐吓操控",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "诱导贷款",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "高额收费",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "灰色兼职",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "刷单",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "远程控制/远控",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "涉黄引流",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "虚拟货币/投资平台",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "团伙作案",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "虚假购物",
+    "category": "风险标签",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "QQ",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "游戏",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "微信",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "短视频",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "APP",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "社交平台",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "电话",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "快手",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "小红书",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "抖音",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "网友",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "粉丝群",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "班级群",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "微博",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "短信",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "二手平台",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "直播平台",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "Telegram",
+    "category": "接触渠道",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "游戏相关诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "学生高频类型诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "恐吓操控型诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "追星相关诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "大学生侵财与涉罪工具人",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "冒充身份类诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "虚假金融类诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "留学生相关诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "情感操控类诈骗",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "招生与境外诱骗类",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "敲诈勒索类",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "钓鱼信息与信息窃取类",
+    "category": "一级类型",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "北京",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "天津",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "河北",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "山西",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "内蒙古",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "辽宁",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "吉林",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "黑龙江",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "上海",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "江苏",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "浙江",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "安徽",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "福建",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "江西",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "山东",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "河南",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "湖北",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "湖南",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "广东",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "广西",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "海南",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "重庆",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "四川",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "贵州",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "云南",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "西藏",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "陕西",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "甘肃",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "青海",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "宁夏",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "新疆",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "香港",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "澳门",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "台湾",
+    "category": "省份覆盖",
+    "weight": 6,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "QQ/QQ群",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "游戏内公屏/私信/语音",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "微信/微信群",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "短视频平台（快手/抖音等）",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "陌生电话（冒充客服）",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "短信（钓鱼链接/退改签/奖学金）",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "闲鱼等二手交易平台",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "社交/婚恋软件",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "校园论坛/QQ兼职群",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "陌生邮件",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "二手交易平台（闲鱼/转转）",
+    "category": "平台/渠道",
+    "weight": 5,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "共被骗",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "共损失",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "警官证",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "合调查",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "蛋仔派对",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "支付宝",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "码转账",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "扫码支付",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "余万元",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "万港元",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "元保证金",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "视频通话",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "对方称其未成年人",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "免费皮肤",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "你是未成年人导致",
+    "category": "高频词",
+    "weight": 4,
+    "source": "keywords_v2.csv"
+  },
+  {
+    "keyword": "寒暑假/独自在家上网（家长疏于监管）",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "使用家长/祖辈手机操作支付",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "隐瞒家长、偷拿手机独自操作",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "开学季（缴费/注销/购票/奖学金集中期）",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "演唱会/明星热度事件期间找票",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "老师上课/凌晨深夜等无人核验时段",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "私下交易脱离官方平台",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "求职/兼职高峰期（暑期工、毕业季）",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "精准信息泄露驱动（购物/培训/快递记录）",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  },
+  {
+    "keyword": "社交平台晒照/笔记被盯上（寄拍引流）",
+    "category": "受害场景",
+    "weight": 3,
+    "source": "keywords_v1.csv"
+  }
+]

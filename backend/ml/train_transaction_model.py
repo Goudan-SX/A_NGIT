@@ -275,7 +275,7 @@ def main() -> None:
         for name, value in sorted(zip(feature_names, importances), key=lambda item: item[1], reverse=True)[:20]
     ]
     metadata = {
-        "model_name": "LightGBM-IndianFinancialFraud",
+        "model_name": "Guardian-AI-Transaction",
         "trained_at": datetime.now().isoformat(sep=" ", timespec="seconds"),
         "rows": len(frame),
         "fraud_rows": int(target.sum()),

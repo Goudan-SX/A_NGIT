@@ -128,6 +128,48 @@ IF COL_LENGTH('dbo.text_cases', 'reviewed_at') IS NULL
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_cases_active' AND object_id = OBJECT_ID('dbo.text_cases'))
     CREATE INDEX IX_cases_active ON dbo.text_cases(is_active, risk_score DESC);
 
+-- Guardian-AI 关键词规则库（来自反诈关键词汇总 CSV）
+IF OBJECT_ID('dbo.guardian_keywords', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.guardian_keywords (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        keyword         NVARCHAR(80) NOT NULL,
+        category        NVARCHAR(40) NOT NULL,
+        weight          INT NOT NULL CONSTRAINT DF_guardian_kw_weight DEFAULT 8,
+        source          NVARCHAR(64) NULL,
+        hit_count       INT NOT NULL CONSTRAINT DF_guardian_kw_hits DEFAULT 0,
+        is_active       BIT NOT NULL CONSTRAINT DF_guardian_kw_active DEFAULT 1,
+        created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_guardian_kw_created DEFAULT SYSDATETIME(),
+        CONSTRAINT UQ_guardian_kw UNIQUE (keyword)
+    );
+END
+
+-- Guardian-AI 分省案例示例
+IF OBJECT_ID('dbo.guardian_cases', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.guardian_cases (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        code            NVARCHAR(20) NOT NULL,
+        province        NVARCHAR(40) NOT NULL,
+        region          NVARCHAR(80) NULL,
+        age_group       NVARCHAR(40) NULL,
+        category        NVARCHAR(80) NULL,
+        subtype         NVARCHAR(120) NULL,
+        scam_type       NVARCHAR(120) NULL,
+        channel         NVARCHAR(120) NULL,
+        method          NVARCHAR(MAX) NULL,
+        keywords        NVARCHAR(500) NULL,
+        loss            NVARCHAR(100) NULL,
+        source          NVARCHAR(300) NULL,
+        tips            NVARCHAR(1000) NULL,
+        created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_guardian_cases_created DEFAULT SYSDATETIME(),
+        CONSTRAINT UQ_guardian_case_code UNIQUE (code)
+    );
+END
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_guardian_cases_province' AND object_id = OBJECT_ID('dbo.guardian_cases'))
+    CREATE INDEX IX_guardian_cases_province ON dbo.guardian_cases(province, category);
+
 -- 交易风控规则库：由金融欺诈数据集提炼，供表格模型/规则引擎使用
 IF OBJECT_ID('dbo.transaction_rules', 'U') IS NULL
 BEGIN

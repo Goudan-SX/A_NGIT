@@ -133,7 +133,10 @@
     });
     setText('detail-title', typeParts.join(' + ') || '风险研判');
     var meta = API.riskMeta(analysis.risk_level);
-    var dimensions = (analysis.dimensions || []).map(function (item) {
+    var dimensionSource = (analysis.guardian && analysis.guardian.components)
+      ? analysis.guardian.components
+      : (analysis.dimensions || []);
+    var dimensions = dimensionSource.map(function (item) {
       var percent = item.max ? Math.round((item.score / item.max) * 100) : 0;
       var cls = percent >= 80 ? 'dimension--danger' : (percent >= 45 ? 'dimension--warn' : '');
       return '<li class="dimension ' + cls + '">' +

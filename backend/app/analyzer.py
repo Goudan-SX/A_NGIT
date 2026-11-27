@@ -11,6 +11,8 @@ import re
 import time
 from typing import Any
 
+from .text_normalize import preprocess_text
+
 # --------------------------------------------------------------------------
 # 一、评分维度（总分 100）
 # --------------------------------------------------------------------------
@@ -718,10 +720,10 @@ def _signals_payload(evidence: list[dict[str, Any]], scores: dict[str, int],
     return payload
 
 
-def analyze_text(text: str, *, engine_name: str = "local-rule-v1") -> dict[str, Any]:
+def analyze_text(text: str, *, engine_name: str = "guardian-rule-v1") -> dict[str, Any]:
     started = time.perf_counter()
     raw_text = text or ""
-    clean = raw_text.replace("\u3000", " ").strip()
+    clean = preprocess_text(raw_text)
     empty = not clean or len(clean) < 2
     scores = _empty_dimensions()
     evidence: list[dict[str, Any]] = []
@@ -936,29 +938,29 @@ def merge_modalities(base: dict[str, Any], parts: list[dict[str, Any]]) -> dict[
         provider = "deepseek" if "deepseek" in providers else "qwen"
         provider_label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
         base["engine"] = {
-            "name": f"hybrid-{provider}-rule",
+            "name": f"guardian-{provider}",
             "ai": True,
             "provider": provider,
-            "note": f"{provider_label} 多模态 + 本地规则引擎",
+            "note": f"Guardian-AI · {provider_label} 多模态 + 本地规则引擎",
         }
     elif any(engine.get("name") == "database-image-cache" for engine in part_engines):
         base["engine"] = {
-            "name": "database-image-cache",
+            "name": "guardian-image-cache",
             "ai": False,
             "provider": "database",
-            "note": "图片库命中 · 复用缓存视觉结果",
+            "note": "Guardian-AI 图片库命中 · 复用缓存视觉结果",
         }
     elif any("ocr" in str(engine.get("note", "")).lower() for engine in part_engines):
         base["engine"] = {
-            "name": "ocr-rule",
+            "name": "guardian-ocr",
             "ai": False,
-            "note": "Windows OCR 识别截图文字 + 本地规则引擎",
+            "note": "Guardian-AI · Windows OCR + 本地规则",
         }
     elif part_engines:
         base["engine"] = {
-            "name": "multimodal-rule",
+            "name": "guardian-multimodal",
             "ai": False,
-            "note": "多模态文件校验 + 本地规则引擎",
+            "note": "Guardian-AI 多模态文件校验 + 本地规则",
         }
 
     base.update({

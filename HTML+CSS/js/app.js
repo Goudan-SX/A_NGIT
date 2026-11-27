@@ -105,14 +105,15 @@
 
   function engineLabel(result) {
     var engine = (result && result.engine) || {};
-    if (engine.name === 'database-cached-review') return '数据库 + AI 缓存';
-    if (engine.name === 'database-image-cache') return '图片库缓存';
-    if (engine.name === 'hybrid-deepseek-multi-image') return 'DeepSeek 多图联合';
-    if (engine.provider === 'deepseek') return 'DeepSeek V4.1';
-    if (engine.ai) return 'Qwen 多模态';
-    if (engine.provider === 'database') return '数据库命中';
-    if (String(engine.note || '').indexOf('OCR') !== -1) return 'OCR + 规则';
-    return '规则引擎 v1';
+    if (engine.name === 'guardian-rule' || engine.name === 'guardian-rule-v1') return 'Guardian-AI · 规则';
+    if (String(engine.name || '').indexOf('multi-image') !== -1) return 'Guardian-AI · 多图联合';
+    if (String(engine.name || '').indexOf('database') !== -1) return 'Guardian-AI · 案例+AI';
+    if (String(engine.name || '').indexOf('image-cache') !== -1) return 'Guardian-AI · 图片缓存';
+    if (String(engine.name || '').indexOf('ocr') !== -1) return 'Guardian-AI · OCR';
+    if (engine.provider === 'deepseek') return 'Guardian-AI · DeepSeek';
+    if (engine.ai) return 'Guardian-AI · Qwen';
+    if (engine.provider === 'database') return 'Guardian-AI · 数据库';
+    return 'Guardian-AI';
   }
 
   function setEngine(text, note) {
@@ -161,7 +162,7 @@
         if (seq !== state.analyzeSeq || state.fullResultSeq === seq) return;
         state.analysis = data.analysis;
         renderAnalysis(data.analysis);
-        setEngine('本地预判', '正在等待 DeepSeek V4.1 复核…');
+        setEngine('Guardian-AI · 快速预判', '正在等待 DeepSeek V4.1 复核…');
       }).catch(function () {
         /* 快速预览失败不阻断正式分析 */
       });
@@ -263,7 +264,19 @@
     renderMatch(result.match, result);
     renderCrossImage(result.cross_image);
 
-    renderDimensions(result.dimensions || []);
+    var dimensions = (result.guardian && result.guardian.components)
+      ? result.guardian.components
+      : (result.dimensions || []);
+    renderDimensions(dimensions);
+    var dimensionNote = $('dimension-note');
+    if (dimensionNote) {
+      if (result.guardian && result.guardian.modality_score) {
+        dimensionNote.textContent = '综合风险含图像视觉评分：' + result.guardian.modality_score + '%';
+        show(dimensionNote);
+      } else {
+        hide(dimensionNote);
+      }
+    }
     renderKeywords(result.matched_keywords || [], result.signals || []);
     renderEvidence(result.signals || []);
     renderPii(result.pii || []);
@@ -298,6 +311,7 @@
     setText($('risk-desc'), '系统会从话术操控、资金诱导、信息窃取、渠道异常、身份伪装五个维度给出可解释评分。');
     hide($('match-badge'));
     hide($('cross-image-section'));
+    hide($('dimension-note'));
     setText($('keyword-count'), '0 项命中');
     setText($('evidence-count'), '0 条');
     setText($('image-count'), '0 项');
@@ -1252,6 +1266,62 @@
     });
   }
 
+  function loadProvinceCases(province) {
+    var list = $('province-case-list');
+    if (!list) return;
+    var params = new URLSearchParams({ province: province || '', limit: '6' });
+    API.get('/api/guardian/cases?' + params.toString()).then(function (data) {
+      list.innerHTML = '';
+      var items = data.items || [];
+      if (!items.length) {
+        list.innerHTML = '<p class="empty-inline">该省份暂无案例</p>';
+        return;
+      }
+      items.forEach(function (item) {
+        var card = document.createElement('article');
+        card.className = 'province-case';
+        var meta = document.createElement('p');
+        meta.className = 'province-case__meta';
+        meta.textContent = [item.province, item.category, item.code].filter(Boolean).join(' · ');
+        var title = document.createElement('h4');
+        title.className = 'province-case__title';
+        title.textContent = item.scam_type || item.subtype || '反诈案例';
+        var method = document.createElement('p');
+        method.className = 'province-case__method';
+        method.textContent = item.method || '';
+        var tip = document.createElement('p');
+        tip.className = 'province-case__tip';
+        tip.textContent = '防范：' + (item.tips || '保持警惕，不转账、不透露验证码');
+        card.appendChild(meta);
+        card.appendChild(title);
+        card.appendChild(method);
+        card.appendChild(tip);
+        list.appendChild(card);
+      });
+    }).catch(function () {
+      list.innerHTML = '<p class="empty-inline">分省案例加载失败</p>';
+    });
+  }
+
+  function initProvinceCases() {
+    var select = $('province-select');
+    if (!select) return;
+    API.get('/api/guardian/provinces').then(function (data) {
+      (data.items || []).forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item.province;
+        option.textContent = item.province + '（' + item.count + '）';
+        select.appendChild(option);
+      });
+      select.addEventListener('change', function () {
+        loadProvinceCases(select.value);
+      });
+      loadProvinceCases('');
+    }).catch(function () {
+      loadProvinceCases('');
+    });
+  }
+
   function loadKnowledge() {
     API.get('/api/knowledge').then(function (data) {
       if (data.items && data.items.length) {
@@ -1517,12 +1587,10 @@
 
   function loadConfig() {
     API.get('/api/config').then(function (data) {
-      if (data.ai && data.ai.provider === 'deepseek') {
-        setEngine('DeepSeek V4.1', data.ai.note);
-      } else if (data.ai && data.ai.enabled) {
-        setEngine('Qwen 多模态', data.ai.note);
+      if (data.ai && data.ai.enabled) {
+        setEngine('Guardian-AI', data.ai.note);
       } else {
-        setEngine('规则引擎 v1', data.ai ? data.ai.note : '本地规则引擎');
+        setEngine('Guardian-AI', data.ai ? data.ai.note : '本地规则引擎');
       }
       setGuard('防护已就绪', true);
     }).catch(function () {
@@ -1541,6 +1609,7 @@
     bindQuiz();
     renderKnowledge(FALLBACK_KNOWLEDGE);
     loadKnowledge();
+    initProvinceCases();
     loadConfig();
     renderMedia();
     setButtonEnabled('report-btn', false);

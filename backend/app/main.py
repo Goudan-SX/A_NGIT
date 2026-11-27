@@ -27,7 +27,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from . import (ai_common, analyzer, case_matcher, config, content_store, db, deepseek,
-               ocr, qwen, repository, transaction_risk)
+               guardian, ocr, qwen, repository, result_cache, transaction_risk)
+from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
 
@@ -37,6 +38,7 @@ async def lifespan(_: FastAPI):
     try:
         db.ensure_database()
         created = case_matcher.seed_cases()
+        guardian.ensure_data()
         transaction_risk.ensure_rules()
         repository.add_log(
             level="success",
@@ -245,6 +247,26 @@ def api_log_stats() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"读取日志统计失败：{exc}") from exc
 
 
+@app.get("/api/guardian/provinces")
+def api_guardian_provinces() -> dict[str, Any]:
+    try:
+        return {"ok": True, "items": guardian.list_provinces()}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"读取案例省份失败：{exc}") from exc
+
+
+@app.get("/api/guardian/cases")
+def api_guardian_cases(
+    province: str = "",
+    category: str = "",
+    limit: int = Query(20, ge=1, le=100),
+) -> dict[str, Any]:
+    try:
+        return {"ok": True, "items": guardian.list_cases(province=province, category=category, limit=limit)}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"读取分省案例失败：{exc}") from exc
+
+
 @app.get("/api/stats")
 def api_stats() -> dict[str, Any]:
     try:
@@ -305,7 +327,7 @@ def _enhance_text_with_ai(result: dict[str, Any], text: str, errors: list[str] |
         try:
             ai_data = deepseek.analyze_text(text)
             result = _apply_ai(result, ai_data, source="text", provider="deepseek")
-            result["engine"]["note"] = "DeepSeek V4.1 文本理解 + 本地规则引擎"
+            result["engine"]["note"] = "Guardian-AI · DeepSeek V4.1 语义精判"
             return result
         except Exception as exc:  # noqa: BLE001
             if errors is not None:
@@ -315,7 +337,7 @@ def _enhance_text_with_ai(result: dict[str, Any], text: str, errors: list[str] |
         try:
             ai_data = qwen.analyze_text(text)
             result = _apply_ai(result, ai_data, source="text", provider="qwen")
-            result["engine"]["note"] = "Qwen 文本理解 + 本地规则引擎"
+            result["engine"]["note"] = "Guardian-AI · Qwen 语义精判"
         except Exception as exc:  # noqa: BLE001
             result["engine"]["note"] = f"Qwen 文本调用失败，已降级为本地规则：{str(exc)[:120]}"
             if errors is not None:
@@ -342,35 +364,66 @@ def _review_case_with_ai(text: str, case: dict[str, Any],
 
 def _analyze_text_with_case(text: str, errors: list[str] | None = None,
                             skip_ai: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
-    """先查案例库；命中则复用案例并做 AI 二次复核，未命中才走 AI 分析。
+    """Guardian-AI 分层过滤：
 
-    skip_ai=True 时只做数据库/本地规则预判，用于前端“先出结果”的快速预览。
+    1. 短 TTL 缓存直接返回；
+    2. 案例库精确/相似命中复用案例；
+    3. 本地关键词 + 五维加权评分，明显高风险/明显低风险跳过 AI；
+    4. 只有模糊文本才调用 DeepSeek 精判。
     """
+    normalized = preprocess_text(text)
+    mode = "fast" if skip_ai else "full"
+    cache_key = hashlib.sha256((mode + ":" + normalized).encode("utf-8")).hexdigest()
+    cached_bundle = result_cache.text_cache.get(cache_key)
+    if cached_bundle:
+        cached_result = cached_bundle.get("result", {})
+        cached_result["cache_hit"] = True
+        return cached_result, cached_bundle.get("match", {"hit": False})
+
     match = case_matcher.lookup(text)
+    semantic = 0.0
+    if match.get("hit"):
+        semantic = float(match.get("similarity") or 0)
+    elif match.get("nearest"):
+        semantic = float(match["nearest"].get("similarity") or 0)
+
     if match.get("hit"):
         case = match["case"]
         if match.get("exact"):
-            cached = case_matcher.result_from_cached_review(case, match)
-            if cached:
-                return cached, match
+            cached_review = case_matcher.result_from_cached_review(case, match)
+            if cached_review:
+                guardian.compute(text, cached_review, semantic)
+                cached_review["engine"] = {
+                    "name": "guardian-database-cached-review",
+                    "ai": True,
+                    "provider": "database",
+                    "note": "Guardian-AI 数据库命中 · 复用 AI 复核缓存",
+                }
+                result_cache.text_cache.set(cache_key, {"result": cached_review, "match": match})
+                return cached_review, match
+
         result = case_matcher.result_from_case(case, match)
+        guardian.compute(text, result, semantic)
         if skip_ai:
             result["engine"] = {
-                "name": "database-match",
+                "name": "guardian-database-fast",
                 "ai": False,
                 "provider": "database",
-                "note": "数据库案例命中（本地快速预判）",
+                "note": "Guardian-AI 数据库命中 · 快速预判",
             }
+            result_cache.text_cache.set(cache_key, {"result": result, "match": match})
             return result, match
+
         provider, review = _review_case_with_ai(text, case, errors)
         if review:
             result = _apply_ai(result, review, source="database", provider=provider)
+            guardian.compute(text, result, semantic)
             label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
             result["engine"] = {
-                "name": f"database-{provider}-review",
+                "name": f"guardian-database-{provider}",
                 "ai": True,
                 "provider": provider,
-                "note": f"数据库案例命中 + {label} 二次复核",
+                "note": f"Guardian-AI 数据库命中 + {label} 复核",
             }
             result["match"]["reviewed_by_ai"] = True
             result["match"]["review_provider"] = provider
@@ -382,22 +435,41 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
                 case_matcher.save_review(case["id"], result)
         else:
             result["engine"] = {
-                "name": "database-match",
+                "name": "guardian-database-rule",
                 "ai": False,
                 "provider": "database",
-                "note": "数据库案例命中；AI 复核不可用，已直接复用案例结果",
+                "note": "Guardian-AI 数据库命中；AI 复核不可用",
             }
+        result_cache.text_cache.set(cache_key, {"result": result, "match": match})
         return result, match
 
     result = analyzer.analyze_text(text)
-    if not skip_ai:
-        result = _enhance_text_with_ai(result, text, errors)
+    guardian.compute(text, result, semantic)
     result["match"] = {
         "hit": False,
         "nearest": match.get("nearest"),
         "reviewed_by_ai": False,
         "review_provider": None,
     }
+
+    if skip_ai or guardian.is_decisive(result):
+        result["engine"] = {
+            "name": "guardian-rule",
+            "ai": False,
+            "provider": "rule",
+            "note": "Guardian-AI 关键词/规则高置信判定，已跳过 AI",
+        }
+        reason = "fast_preview" if skip_ai else ("high_confidence" if result.get("risk_score", 0) >= 50 else "obvious_low_risk")
+        result["layered"] = {"ai_used": False, "reason": reason}
+        result_cache.text_cache.set(cache_key, {"result": result, "match": match})
+        return result, match
+
+    result = _enhance_text_with_ai(result, text, errors)
+    guardian.compute(text, result, semantic)
+    result["layered"] = {"ai_used": True, "reason": "ambiguous_text"}
+    result["engine"]["name"] = "guardian-ai"
+    result["engine"]["note"] = result["engine"].get("note", "Guardian-AI 语义精判")
+    result_cache.text_cache.set(cache_key, {"result": result, "match": match})
     return result, match
 
 
@@ -493,6 +565,13 @@ def _image_meta(data: bytes, file: UploadFile) -> tuple[int | None, int | None, 
         raise HTTPException(status_code=400, detail=f"图片 {file.filename} 无法解析：{exc}") from exc
 
 
+async def _safe_ocr(path) -> str:
+    try:
+        return await asyncio.to_thread(ocr.extract_text, path)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 async def _process_image_upload(file: UploadFile, note: str, save: bool) -> dict[str, Any]:
     original_name = Path(file.filename or "").name
     ext = Path(original_name).suffix.lower()
@@ -534,6 +613,8 @@ async def _process_image_upload(file: UploadFile, note: str, save: bool) -> dict
         ai_provider = "database"
         ocr_source = "image-cache"
     else:
+        # OCR 与视觉模型同时跑，最终只等最慢的一路，不串行阻塞。
+        ocr_task = asyncio.create_task(_safe_ocr(config.UPLOAD_DIR / stored_name)) if ocr.is_available() else None
         if deepseek.is_enabled():
             try:
                 ai_data = await asyncio.to_thread(
@@ -552,27 +633,25 @@ async def _process_image_upload(file: UploadFile, note: str, save: bool) -> dict
                 ocr_source = "qwen-vl"
             except Exception as exc:  # noqa: BLE001
                 ai_error = str(exc)
-        if not image_text and ocr.is_available():
-            try:
-                image_text = await asyncio.to_thread(
-                    ocr.extract_text, config.UPLOAD_DIR / stored_name
-                )
+        if ocr_task:
+            if not image_text:
+                image_text = await ocr_task
                 if image_text:
                     ocr_source = "windows-ocr"
-            except Exception as exc:  # noqa: BLE001
-                ocr_error = str(exc)
+            else:
+                ocr_task.cancel()
         local = analyzer.analyze_text("\n".join([note, original_name, image_text]).strip())
         local = _apply_ai(local, ai_data, source="image", provider=ai_provider) if ai_data else local
         if ai_provider == "deepseek":
-            local["engine"]["note"] = "DeepSeek V4.1 视觉理解 + 本地规则引擎"
+            local["engine"]["note"] = "Guardian-AI · DeepSeek V4.1 视觉"
         elif ai_provider == "qwen":
-            local["engine"]["note"] = "Qwen-VL 图片理解 + 本地规则引擎"
+            local["engine"]["note"] = "Guardian-AI · Qwen-VL 视觉"
         elif image_text:
-            local["engine"]["note"] = "Windows OCR 识别截图文字 + 本地规则引擎"
+            local["engine"]["note"] = "Guardian-AI · Windows OCR + 本地规则"
         elif not (deepseek.is_enabled() or qwen.is_enabled()):
-            local["engine"]["note"] = "未配置视觉模型且 OCR 未识别到文字：图片仅完成格式与元数据校验"
+            local["engine"]["note"] = "Guardian-AI · 未配置视觉模型且 OCR 未识别到文字"
         elif ai_error:
-            local["engine"]["note"] = f"视觉模型调用失败，已降级为本地规则：{ai_error[:120]}"
+            local["engine"]["note"] = f"Guardian-AI · 视觉调用失败，已降级：{ai_error[:120]}"
 
     if save:
         try:
@@ -768,11 +847,11 @@ def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str,
     result["suggestions"] = result["suggestions"][:8]
     provider_label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
     result["engine"] = {
-        "name": f"hybrid-{provider}-rule",
+        "name": f"guardian-{provider}",
         "ai": True,
         "provider": provider,
         "source": source,
-        "note": f"{provider_label} + 本地规则引擎",
+        "note": f"Guardian-AI · {provider_label} + 本地规则引擎",
     }
     result["ai"] = {"provider": provider, "score": ai_score, "enabled": True}
     return result
@@ -790,8 +869,7 @@ async def analyze_multimodal(
     text = (text or "")[:20000]
     note = (note or "")[:500]
     errors: list[str] = []
-    base, text_match = _analyze_text_with_case(text, errors)
-    text_case_result = copy.deepcopy(base)
+    text_task = asyncio.create_task(asyncio.to_thread(_analyze_text_with_case, text, errors))
     parts: list[dict[str, Any]] = []
     media_rows: list[dict[str, Any]] = []
     staging_rows: list[dict[str, Any]] = []
@@ -817,6 +895,8 @@ async def analyze_multimodal(
     tasks.extend(asyncio.create_task(_process_image_upload(file, note, save)) for file in image_upload_files)
     tasks.extend(asyncio.create_task(_process_audio_upload(file, note, save)) for file in audio_upload_files)
     results = await asyncio.gather(*tasks, return_exceptions=True)
+    base, text_match = await text_task
+    text_case_result = copy.deepcopy(base)
     for result in results:
         if isinstance(result, Exception):
             errors.append(f"文件处理失败：{str(result)[:160]}")
@@ -833,6 +913,24 @@ async def analyze_multimodal(
     image_parts = [item for item in parts if item.get("type") == "image"]
 
     combined = analyzer.merge_modalities(base, parts)
+    before_guardian = int(combined.get("risk_score", 0))
+    guardian_text = "\n".join(
+        [text, note] + [str(part.get("text", "")) for part in parts if part.get("text")]
+    ).strip()
+    semantic = 0.0
+    if text_match.get("hit"):
+        semantic = float(text_match.get("similarity") or 0)
+    elif text_match.get("nearest"):
+        semantic = float(text_match["nearest"].get("similarity") or 0)
+    combined = guardian.compute(guardian_text, combined, semantic)
+    if before_guardian > combined["risk_score"]:
+        combined["risk_score"] = before_guardian
+        combined["guardian"]["modality_score"] = before_guardian
+        level = analyzer._level_for(before_guardian)
+        combined["risk_level"] = level
+        combined["risk_label"] = analyzer.LEVELS[level]["label"]
+        combined["risk_hint"] = analyzer.LEVELS[level]["hint"]
+        combined["guardian"]["score"] = before_guardian
 
     # 多图联合分析：不是简单取单图最高分，而是让模型横向比对多张图片的信息。
     if len(image_parts) >= 2:
