@@ -1183,11 +1183,12 @@ def mask_text(text: str, result: dict[str, Any] | None = None) -> str:
 def extract_suspicious_snippets(text: str, result: dict[str, Any] | None = None) -> str:
     """只提取命中风险信号的原文片段，用于前端展示（不全显原文，保护隐私）。
 
-    从 result 的 signals / inferences 中取出 evidence（命中片段），
-    去重后按权重降序拼接。未命中任何信号时返回空字符串。
+    从 result 的 signals / inferences 中取出 evidence（命中片段），去除互相
+    包含的子串（若 A 是 B 的真子串则丢弃 A，保留更完整上下文），按权重降序
+    拼接。未命中任何信号时返回空字符串。
     """
     info = result or {}
-    snippets: list[tuple[float, str]] = []
+    weighted: list[tuple[float, str]] = []
     seen: set[str] = set()
     for item in (info.get("signals") or []) + (info.get("inferences") or []):
         if item.get("protective"):
@@ -1196,7 +1197,13 @@ def extract_suspicious_snippets(text: str, result: dict[str, Any] | None = None)
         if not ev or ev in seen:
             continue
         seen.add(ev)
-        weight = float(item.get("weight", 0) or 0)
-        snippets.append((weight, ev))
-    snippets.sort(key=lambda pair: pair[0], reverse=True)
-    return "\n".join(ev for _, ev in snippets)
+        weighted.append((float(item.get("weight", 0) or 0), ev))
+    all_ev = [ev for _, ev in weighted]
+    kept: list[str] = []
+    for _, ev in sorted(weighted, key=lambda pair: pair[0], reverse=True):
+        # 若当前片段是任一其他片段的真子串，跳过（保留更完整上下文）
+        if any(ev in other and ev != other for other in all_ev):
+            continue
+        if ev not in kept:
+            kept.append(ev)
+    return "\n".join(kept)
