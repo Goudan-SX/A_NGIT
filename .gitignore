@@ -25,6 +25,9 @@ backend/data/thumbnails/*
 node_modules/
 *.log
 
+# 本地临时脚本 / 测试文件
+_tmp_*
+
 # 系统文件
 .DS_Store
 Thumbs.db
