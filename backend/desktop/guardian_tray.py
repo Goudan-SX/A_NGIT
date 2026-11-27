@@ -20,6 +20,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import uiautomation as auto
+from uiautomation import UIAutomationInitializerInThread
 from PIL import Image, ImageDraw, ImageFont
 from pystray import Icon, Menu, MenuItem
 
@@ -31,6 +32,7 @@ from backend.app import analyzer, config, ocr, security  # noqa: E402
 
 CONFIG_PATH = config.DATA_DIR / "tray_config.json"
 QUEUE_PATH = config.DATA_DIR / "tray_alerts.db"
+PID_PATH = config.DATA_DIR / "tray.pid"
 API_BASE = "http://127.0.0.1:8000"
 POLL_SECONDS = 0.5
 ALERT_COOLDOWN = 600
@@ -301,12 +303,16 @@ def tick() -> None:
 
 
 def worker() -> None:
-    while not _stop.is_set():
-        try:
-            tick()
-        except Exception:  # noqa: BLE001
-            pass
-        time.sleep(POLL_SECONDS)
+    try:
+        with UIAutomationInitializerInThread():
+            while not _stop.is_set():
+                try:
+                    tick()
+                except Exception:  # noqa: BLE001
+                    pass
+                time.sleep(POLL_SECONDS)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def toggle_pause(icon: Icon, item: MenuItem) -> None:
@@ -353,8 +359,16 @@ def main() -> None:
             MenuItem("退出", quit_app),
         ),
     )
+    PID_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
     threading.Thread(target=worker, daemon=True).start()
-    _icon.run()
+    try:
+        _icon.run()
+    finally:
+        try:
+            PID_PATH.unlink()
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

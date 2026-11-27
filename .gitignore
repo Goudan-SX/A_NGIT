@@ -43,3 +43,5 @@ desktop.ini
 # 编辑器个人配置（保留团队共享的 settings.json）
 .vscode/*
 !.vscode/settings.json
+backend/data/tray.pid
+@AutomationLog.txt
