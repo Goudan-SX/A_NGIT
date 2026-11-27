@@ -53,3 +53,6 @@ backend/data/overlay_state.tmp
 backend/data/backend.pid
 
 backend/data/conversations.db
+
+# 备份文件
+*.bak
