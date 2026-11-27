@@ -35,7 +35,7 @@ CONFIG_PATH = config.DATA_DIR / "tray_config.json"
 QUEUE_PATH = config.DATA_DIR / "tray_alerts.db"
 PID_PATH = config.DATA_DIR / "tray.pid"
 API_BASE = "http://127.0.0.1:8000"
-POLL_SECONDS = 0.5
+POLL_SECONDS = 1.5
 ALERT_COOLDOWN = 600
 _last_hash = ""
 _last_alert_at = 0.0
@@ -145,9 +145,12 @@ def visible_rect(control) -> tuple[int, int, int, int] | None:
         return None
 
 
-def collect_controls(control, depth: int = 0, rows: list[str] | None = None) -> list[str]:
+def collect_controls(control, depth: int = 0, rows: list[str] | None = None,
+                     deadline: float | None = None) -> list[str]:
     rows = rows if rows is not None else []
-    if depth > 5 or len(rows) >= 80:
+    if deadline is None:
+        deadline = time.monotonic() + 0.35
+    if time.monotonic() > deadline or depth > 4 or len(rows) >= 60:
         return rows
     try:
         control_type = control.ControlTypeName
@@ -159,7 +162,7 @@ def collect_controls(control, depth: int = 0, rows: list[str] | None = None) -> 
             # 明确不读取输入框/密码框。
             pass
         for child in control.GetChildren():
-            collect_controls(child, depth + 1, rows)
+            collect_controls(child, depth + 1, rows, deadline)
     except Exception:  # noqa: BLE001
         pass
     return rows
@@ -186,7 +189,7 @@ def allowed(title: str) -> bool:
 def read_visible_text(window_title: str) -> str:
     try:
         control = auto.GetForegroundControl().GetTopLevelControl()
-        rows = collect_controls(control)
+        rows = collect_controls(control, deadline=time.monotonic() + 0.4)
         text = "\n".join(rows).strip()
         if len(text) >= 4:
             return text[-4000:]
