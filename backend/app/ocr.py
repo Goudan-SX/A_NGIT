@@ -49,6 +49,10 @@ def extract_text(image_path: str | Path, timeout: int = 45) -> str:
         path,
     ]
     try:
+        # 隐藏 PowerShell 控制台，避免托盘 OCR 兜底时反复闪窗。
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0
         result = subprocess.run(
             command,
             capture_output=True,
@@ -56,6 +60,8 @@ def extract_text(image_path: str | Path, timeout: int = 45) -> str:
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            creationflags=0x08000000,
+            startupinfo=startupinfo,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
