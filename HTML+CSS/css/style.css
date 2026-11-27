@@ -2187,6 +2187,111 @@ svg {
   font-weight: 700;
 }
 
+/* 图片采集 */
+.image-capture-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.image-capture-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.image-capture-card__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background-color: var(--gray-100);
+  background-position: center;
+  background-size: cover;
+  cursor: zoom-in;
+}
+
+.image-capture-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+}
+
+.image-capture-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.image-capture-card__name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-700);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-capture-card__time {
+  font-size: 11px;
+  color: var(--gray-400);
+}
+
+.image-capture-card__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--gray-500);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.image-capture-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.image-capture-card__delete {
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--gray-400);
+  background: transparent;
+  border: 1px solid var(--gray-200);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.image-capture-card__delete:hover {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+@media (max-width: 1120px) {
+  .image-capture-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .image-capture-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .image-capture-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* 分省案例 */
 .province-panel {
   gap: 14px;
@@ -2730,6 +2835,26 @@ svg {
   background: linear-gradient(140deg, var(--blue-600), var(--blue-800));
   border-color: transparent;
   border-radius: 14px 4px 14px 14px;
+}
+
+.chat-bubble--image {
+  padding: 4px;
+  background-color: var(--white);
+  border-color: var(--gray-100);
+}
+
+.chat-row--self .chat-bubble--image {
+  background-color: var(--blue-50);
+  border-color: var(--blue-100);
+}
+
+.chat-image {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 10px;
+  object-fit: cover;
+  cursor: zoom-in;
 }
 
 .chat-composer {

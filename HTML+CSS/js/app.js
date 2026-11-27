@@ -200,6 +200,7 @@
       }
       renderAnalysis(result);
       renderMedia();
+      captureAnalyzedImages(result);
       setEngine(engineLabel(result),
         (result.engine && result.engine.note) || '本地规则引擎 + Qwen 适配');
       setGuard('防护已就绪', true);
@@ -906,6 +907,243 @@
     }
   }
 
+
+  /* ------------------------------------------------------------------------
+   * 图片采集：分析完成后暂存、删除、清空
+   * ---------------------------------------------------------------------- */
+  var IMAGE_CAPTURE_KEY = 'guardian_image_captures_v1';
+  var PENDING_CHAT_IMAGE_KEY = 'guardian_pending_chat_image';
+  var incomingMediaIds = {};
+
+  function loadImageCaptures() {
+    try {
+      return JSON.parse(localStorage.getItem(IMAGE_CAPTURE_KEY) || '[]');
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveImageCaptures(items) {
+    var list = items.slice(0, 24);
+    while (list.length) {
+      try {
+        localStorage.setItem(IMAGE_CAPTURE_KEY, JSON.stringify(list));
+        return true;
+      } catch (error) {
+        if (list.length === 1) {
+          list[0].thumbnail = '';
+          try {
+            localStorage.setItem(IMAGE_CAPTURE_KEY, JSON.stringify(list));
+            return true;
+          } catch (inner) {
+            return false;
+          }
+        }
+        list.pop();
+      }
+    }
+    return false;
+  }
+
+  function makeThumbnail(url) {
+    return new Promise(function (resolve) {
+      var image = new Image();
+      image.onload = function () {
+        try {
+          var maxWidth = 360;
+          var scale = Math.min(1, maxWidth / image.width);
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.72));
+        } catch (error) {
+          resolve('');
+        }
+      };
+      image.onerror = function () { resolve(''); };
+      image.src = url;
+    });
+  }
+
+  function captureAnalyzedImages(result) {
+    var images = state.files.filter(function (item) {
+      return item.kind === 'image' && item.status === 'done';
+    });
+    if (!images.length) return;
+    var captures = loadImageCaptures();
+    images.forEach(function (item) {
+      var captureId = item.captureId || ('cap-' + Date.now() + '-' + item.id);
+      item.captureId = captureId;
+      var existing = captures.find(function (entry) { return entry.id === captureId; });
+      var record = existing || {
+        id: captureId,
+        name: item.name,
+        time: new Date().toLocaleString('zh-CN', { hour12: false }),
+        thumbnail: ''
+      };
+      record.score = typeof item.score === 'number' ? Math.round(item.score) : (result.risk_score || 0);
+      record.level = record.score >= 90 ? 'critical' : record.score >= 50 ? 'high' : record.score >= 20 ? 'medium' : 'low';
+      record.label = API.riskMeta(record.level).label;
+      record.summary = item.summary || result.summary || '';
+      record.ocrText = item.ocrText || '';
+      record.scamType = result.scam_type || '';
+      record.source = item.source || 'upload';
+      record.components = result.guardian && result.guardian.components ? result.guardian.components : [];
+      if (!existing) captures.unshift(record);
+      if (!record.thumbnail) {
+        makeThumbnail(item.url).then(function (thumb) {
+          record.thumbnail = thumb;
+          saveImageCaptures(captures);
+          renderImageCaptures();
+        });
+      }
+    });
+    saveImageCaptures(captures);
+    renderImageCaptures();
+  }
+
+  function renderImageCaptures() {
+    var grid = $('image-capture-grid');
+    if (!grid) return;
+    var items = loadImageCaptures();
+    var empty = $('image-capture-empty');
+    grid.innerHTML = '';
+    if (!items.length) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    items.forEach(function (item) {
+      var card = document.createElement('article');
+      card.className = 'image-capture-card';
+
+      var thumb = document.createElement('div');
+      thumb.className = 'image-capture-card__thumb';
+      if (item.thumbnail) {
+        thumb.style.backgroundImage = 'url(' + item.thumbnail + ')';
+        thumb.title = '点击放大';
+        thumb.addEventListener('click', function () {
+          openImageModal(item.thumbnail, item.name || '采集图片');
+        });
+      }
+
+      var body = document.createElement('div');
+      body.className = 'image-capture-card__body';
+
+      var head = document.createElement('div');
+      head.className = 'image-capture-card__head';
+      var name = document.createElement('span');
+      name.className = 'image-capture-card__name';
+      name.textContent = item.name || '聊天图片';
+      var score = document.createElement('span');
+      score.className = 'tag ' + (item.score >= 50 ? 'tag--danger' : 'tag--neutral');
+      score.textContent = (item.score || 0) + '%';
+      head.appendChild(name);
+      head.appendChild(score);
+
+      var time = document.createElement('span');
+      time.className = 'image-capture-card__time';
+      time.textContent = item.time || '';
+
+      var summary = document.createElement('p');
+      summary.className = 'image-capture-card__summary';
+      summary.textContent = item.summary || '暂无摘要';
+
+      var footer = document.createElement('div');
+      footer.className = 'image-capture-card__footer';
+      var level = document.createElement('span');
+      level.className = 'tag ' + (item.level === 'high' || item.level === 'critical' ? 'tag--danger' : 'tag--neutral');
+      level.textContent = item.label || '风险';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'image-capture-card__delete';
+      remove.textContent = '删除';
+      remove.addEventListener('click', function () {
+        deleteImageCapture(item.id);
+      });
+      footer.appendChild(level);
+      footer.appendChild(remove);
+
+      body.appendChild(head);
+      body.appendChild(time);
+      body.appendChild(summary);
+      body.appendChild(footer);
+      card.appendChild(thumb);
+      card.appendChild(body);
+      grid.appendChild(card);
+    });
+  }
+
+  function deleteImageCapture(id) {
+    var items = loadImageCaptures().filter(function (item) { return item.id !== id; });
+    saveImageCaptures(items);
+    renderImageCaptures();
+    toast('已删除该图片采集', 'success');
+  }
+
+  function clearImageCaptures() {
+    if (!loadImageCaptures().length) return;
+    if (!window.confirm('确定清空所有图片采集吗？')) return;
+    localStorage.removeItem(IMAGE_CAPTURE_KEY);
+    renderImageCaptures();
+    toast('已清空图片采集', 'success');
+  }
+
+  function dataUrlToFile(dataUrl, name) {
+    var parts = String(dataUrl).split(',');
+    var mime = (parts[0].match(/data:([^;]+)/) || [])[1] || 'image/png';
+    var binary = atob(parts[1] || '');
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], name || 'chat-image.png', { type: mime });
+  }
+
+  function handleIncomingChatImage(payload) {
+    if (!payload || payload.type !== 'chat-image' || !payload.dataUrl) return;
+    var id = payload.id || payload.timestamp || String(Date.now());
+    if (incomingMediaIds[id]) return;
+    incomingMediaIds[id] = true;
+    try {
+      var file = dataUrlToFile(payload.dataUrl, payload.name || '聊天图片.png');
+      addFiles([file]);
+      localStorage.removeItem(PENDING_CHAT_IMAGE_KEY);
+      toast('已接收聊天图片，正在主页面分析', 'success');
+    } catch (error) {
+      toast('聊天图片接收失败：' + error.message, 'error');
+    }
+  }
+
+  function initIncomingMedia() {
+    localStorage.setItem('guardian_main_alive', String(Date.now()));
+    setInterval(function () {
+      localStorage.setItem('guardian_main_alive', String(Date.now()));
+    }, 2500);
+
+    try {
+      var pending = JSON.parse(localStorage.getItem(PENDING_CHAT_IMAGE_KEY) || 'null');
+      if (pending) handleIncomingChatImage(pending);
+    } catch (error) {
+      localStorage.removeItem(PENDING_CHAT_IMAGE_KEY);
+    }
+
+    window.addEventListener('storage', function (event) {
+      if (event.key !== PENDING_CHAT_IMAGE_KEY || !event.newValue) return;
+      try {
+        handleIncomingChatImage(JSON.parse(event.newValue));
+      } catch (error) {
+        /* ignore malformed payload */
+      }
+    });
+
+    if ('BroadcastChannel' in window) {
+      var channel = new BroadcastChannel('guardian-ai-media');
+      channel.onmessage = function (event) {
+        handleIncomingChatImage(event.data);
+      };
+    }
+  }
+
   function bindUploader() {
     var uploader = $('uploader');
     var fileInput = $('file-input');
@@ -1560,6 +1798,7 @@
     document.querySelectorAll('.view').forEach(function (view) {
       view.classList.toggle('is-active', view.id === 'view-' + name);
     });
+    if (name === 'images') renderImageCaptures();
     document.querySelectorAll('[data-view-link]').forEach(function (link) {
       var active = link.getAttribute('data-view-link') === name;
       link.classList.toggle('site-nav__link--active', active);
@@ -1611,6 +1850,10 @@
     loadKnowledge();
     initProvinceCases();
     loadConfig();
+    var clearCaptures = $('clear-image-captures');
+    if (clearCaptures) clearCaptures.addEventListener('click', clearImageCaptures);
+    renderImageCaptures();
+    initIncomingMedia();
     renderMedia();
     setButtonEnabled('report-btn', false);
     setButtonEnabled('export-btn', false);

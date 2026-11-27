@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
   <title>反诈卫士 · Guardian-AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.2.2" />
+  <link rel="stylesheet" href="../css/style.css?v=1.4.0" />
 </head>
 
 <body>
@@ -33,6 +33,7 @@
         <a class="site-nav__link" href="#daily" data-view-link="daily">每日一反诈</a>
         <a class="site-nav__link" href="#quiz" data-view-link="quiz">反诈问答</a>
         <a class="site-nav__link" href="#knowledge" data-view-link="knowledge">知识宣传</a>
+        <a class="site-nav__link" href="#images" data-view-link="images">图片采集</a>
       </nav>
 
       <p class="guard-status" id="guard-status">
@@ -454,6 +455,20 @@
         </div>
       </div>
     </section>
+
+    <!-- ==================== 视图五：图片采集 ==================== -->
+    <section class="view" id="view-images" aria-labelledby="images-title">
+      <div class="page-head">
+        <div class="page-head__heading">
+          <p class="panel__eyebrow">图片采集</p>
+          <h2 class="panel__title" id="images-title">已分析的图片</h2>
+          <p class="field-note">每次图片分析完成后自动暂存到这里，仅保存在当前浏览器。</p>
+        </div>
+        <button class="btn btn--ghost btn--sm" id="clear-image-captures" type="button">清空采集</button>
+      </div>
+      <div class="image-capture-grid" id="image-capture-grid"></div>
+      <p class="empty-inline" id="image-capture-empty">还没有采集到图片。上传图片或从模拟聊天发送图片后，会出现在这里。</p>
+    </section>
   </main>
 
   <!-- ==================== 页脚 ==================== -->
@@ -544,7 +559,7 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.2.2"></script>
-  <script src="../js/app.js?v=1.2.2"></script>
+  <script src="../js/api.js?v=1.4.0"></script>
+  <script src="../js/app.js?v=1.4.0"></script>
 </body>
 </html>

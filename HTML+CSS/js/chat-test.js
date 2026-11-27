@@ -45,9 +45,60 @@
       + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
 
-  function addMessage(role, text) {
-    messages.push({ role: role, text: text, timestamp: timestamp() });
+  function addMessage(role, text, extra) {
+    var item = { role: role, text: text || '', timestamp: timestamp() };
+    if (extra) {
+      Object.keys(extra).forEach(function (key) { item[key] = extra[key]; });
+    }
+    messages.push(item);
     render();
+  }
+
+  function notifyMainImage(file, dataUrl) {
+    var payload = {
+      type: 'chat-image',
+      id: 'chat-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      dataUrl: dataUrl,
+      name: file.name || '聊天图片.png',
+      timestamp: timestamp()
+    };
+    try {
+      localStorage.setItem('guardian_pending_chat_image', JSON.stringify(payload));
+    } catch (error) {
+      /* ignore storage quota */
+    }
+    if ('BroadcastChannel' in window) {
+      try {
+        var channel = new BroadcastChannel('guardian-ai-media');
+        channel.postMessage(payload);
+        channel.close();
+      } catch (error) {
+        /* ignore */
+      }
+    }
+    var alive = Number(localStorage.getItem('guardian_main_alive') || 0);
+    if (Date.now() - alive > 6000) {
+      window.open('/', '_blank');
+    }
+  }
+
+  function sendImage(file) {
+    if (!file || file.type.indexOf('image/') !== 0) {
+      alert('请选择图片文件');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('图片不能超过 10 MB');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var dataUrl = String(reader.result || '');
+      addMessage('self', '', { type: 'image', dataUrl: dataUrl, name: file.name || '聊天图片.png' });
+      notifyMainImage(file, dataUrl);
+      scheduleReply();
+    };
+    reader.readAsDataURL(file);
   }
 
   function render() {
@@ -61,7 +112,16 @@
       meta.textContent = (item.role === 'self' ? '你' : '对方') + ' · ' + item.timestamp;
       var bubble = document.createElement('div');
       bubble.className = 'chat-bubble';
-      bubble.textContent = item.text;
+      if (item.type === 'image' && item.dataUrl) {
+        bubble.classList.add('chat-bubble--image');
+        var image = document.createElement('img');
+        image.className = 'chat-image';
+        image.src = item.dataUrl;
+        image.alt = item.name || '聊天图片';
+        bubble.appendChild(image);
+      } else {
+        bubble.textContent = item.text;
+      }
       row.appendChild(meta);
       row.appendChild(bubble);
       log.appendChild(row);
@@ -111,6 +171,15 @@
     });
     $('demo-btn').addEventListener('click', runDemo);
     $('reset-btn').addEventListener('click', reset);
+    var imageBtn = $('single-chat-image-btn');
+    var imageInput = $('single-chat-image-input');
+    if (imageBtn && imageInput) {
+      imageBtn.addEventListener('click', function () { imageInput.click(); });
+      imageInput.addEventListener('change', function () {
+        if (imageInput.files && imageInput.files[0]) sendImage(imageInput.files[0]);
+        imageInput.value = '';
+      });
+    }
     $('scenario-select').addEventListener('change', function () {
       addMessage('peer', '场景已切换，可以发送消息测试。');
     });

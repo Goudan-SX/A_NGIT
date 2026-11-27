@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>单人聊天测试 · Guardian-AI</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.3.0" />
+  <link rel="stylesheet" href="../css/style.css?v=1.4.0" />
 </head>
 <body class="single-chat-body">
   <h1 class="visually-hidden">Guardian-AI 单人聊天测试页</h1>
@@ -55,7 +55,7 @@
         </div>
       </header>
 
-      <p class="single-chat__hint">这个页面只用于单人测试：你发送消息，页面模拟“对方”回复。浏览器插件会实时读取消息并显示风险环。</p>
+      <p class="single-chat__hint">这个页面只用于单人测试：你发送消息，页面模拟“对方”回复。浏览器插件会实时读取消息并显示风险环；发送图片会自动同步到检测台的“图片采集”。</p>
 
       <div class="chat-log single-chat__log" id="single-chat-log" role="log" aria-live="polite"></div>
 
@@ -64,6 +64,8 @@
         <textarea id="single-chat-input" class="chat-composer__input" rows="2"
           placeholder="输入消息，Enter 发送，Shift+Enter 换行…"></textarea>
         <button class="btn btn--primary" id="single-chat-send" type="button">发送</button>
+        <button class="btn btn--ghost" id="single-chat-image-btn" type="button">发送图片</button>
+        <input id="single-chat-image-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
       </div>
       <p class="field-note">单人测试页不会保存聊天内容；检测只由浏览器插件对当前消息执行。</p>
     </section>
@@ -75,6 +77,6 @@
     <p class="site-footer__links"><a href="index.html">返回检测台</a></p>
   </footer>
 
-  <script src="../js/chat-test.js?v=1.3.0"></script>
+  <script src="../js/chat-test.js?v=1.4.0"></script>
 </body>
 </html>

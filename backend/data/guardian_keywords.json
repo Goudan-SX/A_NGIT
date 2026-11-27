@@ -1,5 +1,47 @@
 [
   {
+    "keyword": "给我卡里打点钱",
+    "category": "风险行为",
+    "weight": 20,
+    "source": "manual"
+  },
+  {
+    "keyword": "卡里打点钱",
+    "category": "风险行为",
+    "weight": 20,
+    "source": "manual"
+  },
+  {
+    "keyword": "转我点",
+    "category": "风险行为",
+    "weight": 15,
+    "source": "manual"
+  },
+  {
+    "keyword": "转我",
+    "category": "风险行为",
+    "weight": 15,
+    "source": "manual"
+  },
+  {
+    "keyword": "给我转",
+    "category": "风险行为",
+    "weight": 15,
+    "source": "manual"
+  },
+  {
+    "keyword": "打点钱",
+    "category": "风险行为",
+    "weight": 15,
+    "source": "manual"
+  },
+  {
+    "keyword": "打钱",
+    "category": "风险行为",
+    "weight": 15,
+    "source": "manual"
+  },
+  {
     "keyword": "刷单返利",
     "category": "话术诱导",
     "weight": 12,
@@ -301,6 +343,12 @@
   },
   {
     "keyword": "跑分",
+    "category": "风险行为",
+    "weight": 12,
+    "source": "manual"
+  },
+  {
+    "keyword": "转钱",
     "category": "风险行为",
     "weight": 12,
     "source": "manual"
@@ -690,6 +738,18 @@
     "source": "manual"
   },
   {
+    "keyword": "汇款",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
+    "keyword": "收款码",
+    "category": "风险行为",
+    "weight": 10,
+    "source": "manual"
+  },
+  {
     "keyword": "征信",
     "category": "话术诱导",
     "weight": 8,
@@ -697,6 +757,12 @@
   },
   {
     "keyword": "扫码",
+    "category": "风险行为",
+    "weight": 8,
+    "source": "manual"
+  },
+  {
+    "keyword": "借钱",
     "category": "风险行为",
     "weight": 8,
     "source": "manual"
