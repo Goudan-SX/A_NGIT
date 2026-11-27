@@ -137,9 +137,11 @@ A_NGIT/
 ├── docs/                          # 需求文档、改造指令、截图、测试素材
 ├── scripts/                       # 快捷方式创建、发布打包、文档生成
 ├── database/                      # 本机 SQL Server 数据文件与备份（不提交）
-├── bootstrap.py                   # 首次安装初始化（建库/种子/root 密码）
+├── bootstrap.py                   # 首次安装初始化（建库/种子/访问密钥）
 ├── install.bat / start.bat        # 安装 / 启动
 ├── start_console.bat / verify.bat # 调试启动 / 健康检查
+├── license_server/app.py          # Flask 授权/数据库接口（可选，默认 5050）
+├── start_license.bat              # 启动 Flask 授权服务
 ├── .env.example                   # 环境变量示例
 ├── run.bat / setup.bat            # 兼容旧入口
 ├── README.md

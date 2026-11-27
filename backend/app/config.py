@@ -58,6 +58,10 @@ DB_DATA_DIR.mkdir(parents=True, exist_ok=True)
 USER_DB_NAME = os.getenv("USER_DB_NAME", "user")
 # root 管理员初始密码；安装脚本会写入随机值，已有数据库不受影响
 ROOT_PASSWORD = os.getenv("ROOT_PASSWORD", "").strip() or "zhf123...aA"
+# 普通用户名额（root 不占名额）
+MAX_USERS = int(os.getenv("MAX_USERS", "7"))
+# 每用户存储上限（GB）
+USER_STORAGE_GB = int(os.getenv("USER_STORAGE_GB", "1"))
 
 # 时效性数据保留策略
 STAGING_TTL_DAYS = int(os.getenv("STAGING_TTL_DAYS", "7"))

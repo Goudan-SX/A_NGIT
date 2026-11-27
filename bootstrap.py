@@ -57,7 +57,6 @@ def main() -> int:
         print("请先安装 SQL Server LocalDB 2019+ 和 ODBC Driver 17 for SQL Server。")
         return 1
 
-    generated = False
     fresh = not main_exists and not user_exists
     provided_password = read_env_value("ROOT_PASSWORD")
     root_password = provided_password or config.ROOT_PASSWORD
@@ -65,13 +64,10 @@ def main() -> int:
         if not provided_password:
             root_password = secrets.token_urlsafe(12)
             write_root_password(root_password)
-            generated = True
-            print("检测到全新安装，未指定 root 密码，已生成随机密码。")
-        else:
-            print("检测到全新安装，使用安装器填写的 root 密码。")
         config.ROOT_PASSWORD = root_password
+        print("检测到全新安装，管理员凭据已初始化。")
     else:
-        print("检测到已有数据库，保留现有 root 密码，不做修改。")
+        print("检测到已有数据库，保留现有管理员凭据。")
 
     print("创建/升级数据库结构并写入种子数据…")
     db.ensure_database()
@@ -82,18 +78,23 @@ def main() -> int:
     guardian.ensure_data()
     transaction_risk.ensure_rules()
 
+    access_key_path = ROOT / "access_key.txt"
+    if not user_db.has_active_access_key():
+        access_key = user_db.generate_access_key()
+        access_key_path.write_text(access_key + "\n", encoding="utf-8")
+        print(f"已生成统一访问密钥：{access_key_path}")
+    elif access_key_path.exists():
+        print(f"访问密钥文件：{access_key_path}")
+    else:
+        print("数据库已有访问密钥；如本地文件丢失，可运行 scripts/generate_access_key.py 重新生成。")
+
     print("")
     print("=" * 56)
     print("Guardian-AI 初始化完成")
     print(f"项目目录：{ROOT}")
     print(f"数据库文件：{config.DB_DATA_DIR}")
     print(f"文本案例：{case_matcher.count_cases()} 条（新增种子 {created} 条）")
-    if fresh:
-        print(f"root 管理员账号：root")
-        print(f"root 初始密码：{root_password}")
-        print("请立即保存该密码；之后可在 .env 查看 ROOT_PASSWORD。")
-    else:
-        print("root 管理员账号已存在，密码以原数据库为准。")
+    print("账号登录/注册和访问密钥均在网页端使用。")
     print("=" * 56)
     return 0
 

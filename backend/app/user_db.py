@@ -13,6 +13,7 @@ import hmac
 import json
 import re
 import secrets
+import string
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -183,10 +184,84 @@ def validate_credentials(username: str, password: str) -> None:
         raise UserAuthError("密码不能超过 128 位")
 
 
-def login_or_register(username: str, password: str) -> tuple[dict[str, Any], bool]:
-    """邮箱不存在时自动注册并登录，存在时校验密码后登录。"""
+def key_digest(key: str) -> str:
+    return hashlib.sha256((key or "").strip().encode("utf-8")).hexdigest()
+
+
+def has_active_access_key() -> bool:
+    return bool(query_one(
+        "SELECT TOP 1 id FROM dbo.access_keys WHERE is_active = 1 AND isdeleted = 0"
+    ))
+
+
+def generate_access_key() -> str:
+    """生成唯一 32 位访问密钥，停用旧密钥，只返回明文一次。"""
+    alphabet = string.ascii_letters + string.digits
+    key = "".join(secrets.choice(alphabet) for _ in range(32))
+    digest = key_digest(key)
+    mask = key[:4] + "..." + key[-4:]
+    with transaction() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE dbo.access_keys SET is_active = 0, updated_at = SYSDATETIME() WHERE is_active = 1"
+        )
+        cur.execute(
+            "INSERT INTO dbo.access_keys (key_hash, key_mask) VALUES (?, ?)",
+            (digest, mask),
+        )
+    return key
+
+
+def verify_access_key(key: str) -> bool:
+    key = (key or "").strip()
+    if not key:
+        return False
+    return bool(query_one(
+        "SELECT TOP 1 id FROM dbo.access_keys WHERE key_hash = ? AND is_active = 1 AND isdeleted = 0",
+        (key_digest(key),),
+    ))
+
+
+def count_active_users() -> int:
+    row = query_one(
+        "SELECT COUNT_BIG(*) AS n FROM dbo.users WHERE role <> N'root' AND isdeleted = 0"
+    )
+    return int(row["n"]) if row else 0
+
+
+def storage_used_bytes(user_id: int) -> int:
+    row = query_one(
+        f"""
+        SELECT
+            ISNULL((SELECT SUM(CAST(size_bytes AS BIGINT)) FROM [{config.DB_NAME}].dbo.staging_contents
+                    WHERE user_id = ? AND isdeleted = 0), 0)
+          + ISNULL((SELECT SUM(CAST(DATALENGTH(input_text) AS BIGINT)
+                            + CAST(DATALENGTH(result_json) AS BIGINT))
+                    FROM [{config.DB_NAME}].dbo.analyses WHERE user_id = ? AND isdeleted = 0), 0) AS used
+        """,
+        (int(user_id), int(user_id)),
+    )
+    return int(row["used"] or 0) if row else 0
+
+
+def storage_limit_bytes() -> int:
+    return int(config.USER_STORAGE_GB) * 1024 * 1024 * 1024
+
+
+def ensure_storage_quota(user_id: int, additional_bytes: int = 0) -> None:
+    if int(user_id) == 1001:  # 管理员账号不受普通用户配额限制
+        return
+    used = storage_used_bytes(user_id)
+    if used + max(0, int(additional_bytes)) > storage_limit_bytes():
+        raise UserAuthError(f"存储空间已满（每用户上限 {config.USER_STORAGE_GB}GB）")
+
+
+def login_or_register(username: str, password: str, access_key: str = "") -> tuple[dict[str, Any], bool]:
+    """有统一访问密钥才能登录/注册；root 账号免密钥且不可重复注册。"""
     username = normalize_username(username)
     validate_credentials(username, password)
+    if username != ROOT_USERNAME and not verify_access_key(access_key):
+        raise UserAuthError("访问密钥错误或已失效")
     row = query_one(
         "SELECT * FROM dbo.users WHERE username = ? AND isdeleted = 0",
         (username,),
@@ -201,6 +276,10 @@ def login_or_register(username: str, password: str) -> tuple[dict[str, Any], boo
                 (row["user_id"],),
             )
     else:
+        if username == ROOT_USERNAME:
+            raise UserAuthError("账号或密码错误")
+        if count_active_users() >= config.MAX_USERS:
+            raise UserAuthError(f"普通用户名额已满（最多 {config.MAX_USERS} 个）")
         password_hash, salt = hash_password(password)
         try:
             with transaction() as conn:

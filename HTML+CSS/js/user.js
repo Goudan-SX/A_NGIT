@@ -45,6 +45,11 @@
     return '待检测';
   }
 
+  function displayName(user) {
+    if (!user) return '';
+    return user.role === 'root' ? '管理员' : user.username;
+  }
+
   function setNavAlert(on) {
     var nav = $('nav-api');
     if (nav) nav.classList.toggle('is-api-alert', Boolean(on));
@@ -60,20 +65,24 @@
     var idEl = $('auth-account-id');
     var keyEl = $('auth-account-key');
     var apiEl = $('auth-account-api');
+    var quotaEl = $('auth-account-quota');
     var lastEl = $('auth-account-last');
     var avatar = $('auth-account-avatar');
-    if (name) name.textContent = user.username;
-    if (role) role.textContent = user.role === 'root' ? 'root 管理员' : '普通用户';
+    if (name) name.textContent = displayName(user);
+    if (role) role.textContent = user.role === 'root' ? '管理员' : '普通用户';
     if (idEl) idEl.textContent = '#' + user.id;
-    if (keyEl) keyEl.textContent = user.user_key || ('u' + user.id + ':' + String(user.username).toLowerCase());
+    if (keyEl) keyEl.textContent = user.role === 'root'
+      ? '受保护'
+      : (user.user_key || ('u' + user.id + ':' + String(user.username).toLowerCase()));
     if (apiEl) {
       apiEl.textContent = cfg && cfg.configured
         ? (cfg.status === 'error' ? '连接异常（请到 API 页检查）' : apiLabel(cfg))
         : '未配置';
       apiEl.classList.toggle('is-error', Boolean(cfg && cfg.configured && cfg.status === 'error'));
     }
+    if (quotaEl) quotaEl.textContent = user.role === 'root' ? '不限额' : (quotaEl.dataset.text || '读取中…');
     if (lastEl) lastEl.textContent = formatTime(user.last_login_at);
-    if (avatar) avatar.textContent = (user.username || 'G').slice(0, 1).toUpperCase();
+    if (avatar) avatar.textContent = user.role === 'root' ? 'A' : (user.username || 'G').slice(0, 1).toUpperCase();
   }
 
   function renderApiStatus(cfg, check) {
@@ -170,9 +179,9 @@
       var name = $('user-name');
       var meta = $('user-meta');
       var avatar = $('user-avatar');
-      if (name) name.textContent = user.username;
-      if (meta) meta.textContent = user.role === 'root' ? 'root 管理员 · #' + user.id : '用户 #' + user.id;
-      if (avatar) avatar.textContent = (user.username || 'G').slice(0, 1).toUpperCase();
+      if (name) name.textContent = displayName(user);
+      if (meta) meta.textContent = user.role === 'root' ? '管理员账号' : '用户 #' + user.id;
+      if (avatar) avatar.textContent = user.role === 'root' ? 'A' : (user.username || 'G').slice(0, 1).toUpperCase();
       fillApiForm(user.api);
     } else {
       show(guest);
@@ -181,6 +190,29 @@
     }
     renderApiGate();
     renderApiStatus(user && user.api, null);
+    loadQuota(user);
+  }
+
+  function loadQuota(user) {
+    var el = $('auth-account-quota');
+    if (!el) return;
+    if (!user) {
+      el.textContent = '—';
+      delete el.dataset.text;
+      return;
+    }
+    if (user.role === 'root') {
+      el.textContent = '不限额';
+      return;
+    }
+    el.textContent = '读取中…';
+    API.get('/api/auth/quota').then(function (data) {
+      var text = API.formatBytes(data.used_bytes) + ' / ' + API.formatBytes(data.limit_bytes);
+      el.dataset.text = text;
+      el.textContent = text;
+    }).catch(function () {
+      el.textContent = '—';
+    });
   }
 
   /* ------------------------------------------------------------------ 登录 */
@@ -197,8 +229,8 @@
     if (submit) submit.textContent = auth.mode === 'register' ? '注册并登录' : '登录';
     if (hint) {
       hint.textContent = auth.mode === 'register'
-        ? '使用邮箱注册；若邮箱已存在，将直接校验密码并登录。'
-        : '如果数据库中没有该邮箱，将自动注册并登录。';
+        ? '普通用户使用邮箱注册，必须填写访问密钥；若邮箱已存在，将校验密码并登录。'
+        : '普通用户登录需填写访问密钥；如果数据库中没有该邮箱，将自动注册并登录。';
     }
     setAuthMessage('');
   }
@@ -244,6 +276,7 @@
     if (auth.busy) return;
     var username = ($('auth-username') || {}).value || '';
     var password = ($('auth-password') || {}).value || '';
+    var accessKey = ($('auth-access-key') || {}).value || '';
     var privacy = $('auth-privacy');
     username = username.trim();
     if (!username) return setAuthMessage('请输入邮箱地址');
@@ -253,7 +286,9 @@
     var submit = $('auth-submit');
     if (submit) { submit.disabled = true; submit.textContent = '处理中…'; }
     setAuthMessage('');
-    API.postJson('/api/auth/login', { username: username, password: password }).then(function (data) {
+    API.postJson('/api/auth/login', {
+      username: username, password: password, access_key: accessKey.trim()
+    }).then(function (data) {
       auth.busy = false;
       if (submit) { submit.disabled = false; submit.textContent = auth.mode === 'register' ? '注册并登录' : '登录'; }
       var user = data.user;
@@ -261,8 +296,10 @@
       closeAuth();
       var passwordEl = $('auth-password');
       if (passwordEl) passwordEl.value = '';
-      if (data.created) toast('账号已创建并登录：' + user.username, 'success');
-      else toast('登录成功：' + user.username, 'success');
+      var keyEl = $('auth-access-key');
+      if (keyEl) keyEl.value = '';
+      if (data.created) toast('账号已创建并登录：' + displayName(user), 'success');
+      else toast('登录成功：' + displayName(user), 'success');
       if (data.api_check && !data.api_check.ok) {
         toast('API 连接异常，请在 API 页检查配置', 'error');
       } else if (user.api && user.api.configured && user.api.status === 'ok') {

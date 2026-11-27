@@ -37,7 +37,7 @@ def include(path: Path) -> bool:
         return False
     if any(parts[:2] == item for item in SKIP_PARTS):
         return False
-    if path.name == ".env":
+    if path.name in {".env", "access_key.txt"}:
         return False
     if path.suffix.lower() in SKIP_SUFFIXES:
         return False

@@ -179,6 +179,7 @@ class ReportRequest(BaseModel):
 class AuthRequest(BaseModel):
     username: str = Field(default="", max_length=254)
     password: str = Field(default="", max_length=128)
+    access_key: str = Field(default="", max_length=64)
 
 
 class ApiConfigRequest(BaseModel):
@@ -443,7 +444,7 @@ def _set_user_cookie(response: Response, token: str) -> None:
 def api_auth_login(payload: AuthRequest, response: Response) -> dict[str, Any]:
     """邮箱不存在时自动注册并登录；已存在时校验密码。"""
     try:
-        user, created = user_db.login_or_register(payload.username, payload.password)
+        user, created = user_db.login_or_register(payload.username, payload.password, payload.access_key)
     except user_db.UserAuthError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     api_check = _test_saved_api(user)
@@ -455,6 +456,22 @@ def api_auth_login(payload: AuthRequest, response: Response) -> dict[str, Any]:
         "created": created,
         "user": user_db.public_user(refreshed),
         "api_check": api_check,
+    }
+
+
+@app.get("/api/auth/quota")
+def api_auth_quota(request: Request) -> dict[str, Any]:
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    used = user_db.storage_used_bytes(int(user["user_id"]))
+    limit = user_db.storage_limit_bytes()
+    return {
+        "ok": True,
+        "used_bytes": used,
+        "limit_bytes": limit,
+        "used_percent": round(used / limit * 100, 2) if limit else 0,
+        "max_users": config.MAX_USERS,
     }
 
 
@@ -959,6 +976,10 @@ def analyze_preview(payload: TextAnalyzeRequest) -> dict[str, Any]:
 @app.post("/api/analyze/text")
 def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
     started = time.perf_counter()
+    try:
+        user_db.ensure_storage_quota(tenant.user_id(), len(payload.text.encode("utf-8")))
+    except user_db.UserAuthError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     result, match = _analyze_text_with_case(payload.text, skip_ai=False)
     result = analyzer.build_hit_contract(result, payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -1350,6 +1371,11 @@ async def analyze_multimodal(
     files: list[UploadFile] | None = File(None),
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    try:
+        upload_bytes = sum(int(getattr(item, "size", 0) or 0) for item in files or [])
+        user_db.ensure_storage_quota(tenant.user_id(), upload_bytes + len((text or "").encode("utf-8")))
+    except user_db.UserAuthError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     text = (text or "")[:20000]
     note = (note or "")[:500]
     errors: list[str] = []

@@ -43,7 +43,7 @@ def should_copy(path: Path) -> bool:
         return False
     if len(parts) >= 2 and parts[:2] in {("docs", "previews"), ("docs", "测试用")}:
         return False
-    if path.name == ".env":
+    if path.name in {".env", "access_key.txt"}:
         return False
     if path.suffix.lower() in {".pyc", ".log", ".pid", ".bak"}:
         return False
@@ -87,7 +87,7 @@ def write_env(target: Path, port: str, root_password: str, log) -> None:
         match = re.search(r"^ROOT_PASSWORD=(.*)$", template, flags=re.MULTILINE)
         if match and match.group(1).strip():
             root_password = match.group(1).strip()
-            log("检测到已有 .env，保留原 root 密码与 AI 配置")
+            log("检测到已有 .env，保留原管理员凭据与 AI 配置")
     else:
         template = (target / ".env.example").read_text(encoding="utf-8")
     values = {
@@ -190,7 +190,7 @@ def console_install(args) -> int:
         if answer not in {"y", "yes"}:
             return 1
     port = args.port
-    root_password = args.root_password or secrets.token_urlsafe(12)
+    root_password = secrets.token_urlsafe(12)
     install(
         target,
         port=str(port),
@@ -215,7 +215,6 @@ def gui_install() -> int:
 
     path_var = tk.StringVar(value=str(default_target()))
     port_var = tk.StringVar(value="8000")
-    root_pwd_var = tk.StringVar(value=secrets.token_urlsafe(12))
     mirror_var = tk.BooleanVar(value=True)
     shortcut_var = tk.BooleanVar(value=True)
     start_var = tk.BooleanVar(value=True)
@@ -237,27 +236,26 @@ def gui_install() -> int:
         filedialog.askdirectory(initialdir=str(Path(path_var.get()).parent)) or path_var.get()
     )).grid(row=0, column=2, padx=(8, 0))
     row(1, "服务端口", ttk.Entry(frm, textvariable=port_var))
-    row(2, "root 初始密码", ttk.Entry(frm, textvariable=root_pwd_var))
-    ttk.Label(frm, text="AI 接口（DeepSeek / OpenAI 兼容）在安装完成后登录网页，在 API 页配置。",
-              foreground="#64748b").grid(row=3, column=1, sticky="w", pady=(2, 6))
+    ttk.Label(frm, text="账号登录/注册与 AI 接口都在安装完成后进入网页端完成。",
+              foreground="#64748b").grid(row=2, column=1, sticky="w", pady=(2, 6))
     ttk.Checkbutton(frm, text="使用国内 PyPI 镜像（推荐）", variable=mirror_var).grid(
-        row=4, column=1, sticky="w", pady=3)
+        row=3, column=1, sticky="w", pady=3)
     ttk.Checkbutton(frm, text="创建桌面和开始菜单快捷方式", variable=shortcut_var).grid(
-        row=5, column=1, sticky="w", pady=3)
+        row=4, column=1, sticky="w", pady=3)
     ttk.Checkbutton(frm, text="安装完成后启动 Guardian-AI", variable=start_var).grid(
-        row=6, column=1, sticky="w", pady=3)
+        row=5, column=1, sticky="w", pady=3)
 
     status = ttk.Label(frm, textvariable=status_var)
-    status.grid(row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    status.grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
     install_btn = ttk.Button(frm, text="开始安装")
-    install_btn.grid(row=7, column=3, sticky="e", pady=(8, 0))
+    install_btn.grid(row=6, column=3, sticky="e", pady=(8, 0))
 
-    ttk.Label(frm, text="安装日志").grid(row=8, column=0, columnspan=3, sticky="w", pady=(10, 4))
+    ttk.Label(frm, text="安装日志").grid(row=7, column=0, columnspan=3, sticky="w", pady=(10, 4))
     log_text = tk.Text(frm, height=10, wrap="word", state="disabled")
-    log_text.grid(row=9, column=0, columnspan=3, sticky="nsew")
-    frm.rowconfigure(9, weight=1)
+    log_text.grid(row=8, column=0, columnspan=3, sticky="nsew")
+    frm.rowconfigure(8, weight=1)
     scroll = ttk.Scrollbar(frm, orient="vertical", command=log_text.yview)
-    scroll.grid(row=9, column=3, sticky="ns")
+    scroll.grid(row=8, column=3, sticky="ns")
     log_text.configure(yscrollcommand=scroll.set)
 
     def append_log(line: str) -> None:
@@ -309,7 +307,7 @@ def gui_install() -> int:
         if target.exists() and any(target.iterdir()) and target.resolve() != SOURCE.resolve():
             if not messagebox.askyesno("确认", f"目录已存在且不为空：\n{target}\n\n继续将覆盖同名文件，是否继续？"):
                 return
-        pwd = root_pwd_var.get().strip() or secrets.token_urlsafe(12)
+        pwd = secrets.token_urlsafe(12)
         busy["value"] = True
         install_btn.configure(state="disabled")
         status_var.set("正在安装，请稍候…")
@@ -361,7 +359,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Guardian-AI 安装器")
     parser.add_argument("--path", help="安装目录（提供后使用命令行模式）")
     parser.add_argument("--port", default="8000")
-    parser.add_argument("--root-password", default="")
+
     parser.add_argument("--yes", action="store_true")
     parser.add_argument("--no-mirror", action="store_true")
     parser.add_argument("--no-shortcut", action="store_true")

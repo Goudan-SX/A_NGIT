@@ -124,3 +124,31 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_users_userkey' AND obj
     CREATE INDEX IX_users_userkey ON dbo.users(user_key) INCLUDE (user_id, role, isdeleted);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_user_data_userkey' AND object_id = OBJECT_ID('dbo.user_data'))
     CREATE INDEX IX_user_data_userkey ON dbo.user_data(user_key, data_key, isdeleted);
+
+GO
+
+-- 统一访问密钥：全系统共用一个 32 位密钥，root 账号不受限制
+IF OBJECT_ID('dbo.access_keys', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.access_keys (
+        id          INT IDENTITY(1,1) NOT NULL
+            CONSTRAINT PK_access_keys PRIMARY KEY,
+        key_hash    CHAR(64) NOT NULL,
+        key_mask    NVARCHAR(32) NOT NULL,
+        is_active   BIT NOT NULL CONSTRAINT DF_access_keys_active DEFAULT 1,
+        isdeleted   BIT NOT NULL CONSTRAINT DF_access_keys_deleted DEFAULT 0,
+        created_at  DATETIME2(0) NOT NULL
+            CONSTRAINT DF_access_keys_created DEFAULT SYSDATETIME(),
+        updated_at  DATETIME2(0) NOT NULL
+            CONSTRAINT DF_access_keys_updated DEFAULT SYSDATETIME()
+    );
+END
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'UX_access_keys_hash' AND object_id = OBJECT_ID('dbo.access_keys'))
+    CREATE UNIQUE INDEX UX_access_keys_hash ON dbo.access_keys(key_hash);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_access_keys_active' AND object_id = OBJECT_ID('dbo.access_keys'))
+    CREATE INDEX IX_access_keys_active ON dbo.access_keys(is_active, isdeleted);
+

@@ -65,3 +65,6 @@ docs/previews/
 
 # 发布包输出
 dist/
+
+# 统一访问密钥（只保留在本机）
+access_key.txt

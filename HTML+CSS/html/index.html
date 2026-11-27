@@ -665,6 +665,7 @@
             <div><dt>用户 ID</dt><dd id="auth-account-id">—</dd></div>
             <div><dt>数据键</dt><dd id="auth-account-key">—</dd></div>
             <div><dt>API 状态</dt><dd id="auth-account-api">未配置</dd></div>
+            <div><dt>存储空间</dt><dd id="auth-account-quota">—</dd></div>
             <div><dt>最近登录</dt><dd id="auth-account-last">—</dd></div>
           </dl>
           <div class="auth-account__actions">
@@ -685,11 +686,14 @@
             <input class="form-input" id="auth-password" type="password" placeholder="请输入密码（至少 6 位）" autocomplete="current-password" />
             <button class="btn btn--ghost btn--sm" id="auth-password-toggle" type="button">显示</button>
           </div>
+          <label class="form-label" for="auth-access-key">访问密钥</label>
+          <input class="form-input" id="auth-access-key" type="text" placeholder="普通用户请输入 32 位统一访问密钥" autocomplete="off" />
+          <p class="auth-hint">普通用户登录/注册必须填写统一访问密钥。</p>
           <label class="auth-privacy">
             <input type="checkbox" id="auth-privacy" />
             <span>我已阅读并同意 <a href="#" id="auth-privacy-link">隐私政策</a></span>
           </label>
-          <p class="auth-hint" id="auth-hint">如果数据库中没有该邮箱，将自动注册并登录。</p>
+          <p class="auth-hint" id="auth-hint">普通用户需填写访问密钥；如果数据库中没有该邮箱，将自动注册并登录。</p>
           <p class="auth-message is-hidden" id="auth-message" role="status"></p>
           <button class="btn btn--primary auth-submit" id="auth-submit" type="submit">登录</button>
         </form>
@@ -699,8 +703,8 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.6.3"></script>
-  <script src="../js/app.js?v=1.6.3"></script>
-  <script src="../js/user.js?v=1.6.3"></script>
+  <script src="../js/api.js?v=1.6.5"></script>
+  <script src="../js/app.js?v=1.6.5"></script>
+  <script src="../js/user.js?v=1.6.5"></script>
 </body>
 </html>
