@@ -71,11 +71,27 @@ def ensure_database() -> None:
         script = schema_path.read_text(encoding="utf-8")
         conn = connect(db_name)
         try:
-            conn.execute(script)
+            execute_script(conn, script)
             conn.commit()
         finally:
             conn.close()
         _schema_ready = True
+
+
+def execute_script(conn: pyodbc.Connection, script: str) -> None:
+    """按 GO 分批执行脚本（SQL Server 同一批次内不能引用刚新增的列）。"""
+    batch: list[str] = []
+    for raw in script.splitlines():
+        if raw.strip().upper() == "GO":
+            chunk = "\n".join(batch).strip()
+            if chunk:
+                conn.execute(chunk)
+            batch = []
+        else:
+            batch.append(raw)
+    chunk = "\n".join(batch).strip()
+    if chunk:
+        conn.execute(chunk)
 
 
 def row_to_dict(cursor: pyodbc.Cursor, row: Iterable[Any]) -> dict[str, Any]:

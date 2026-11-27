@@ -313,3 +313,108 @@ BEGIN
      N'第一时间停止转账并联系银行客服冻结账户；保留聊天记录、转账凭证、对方账号和链接；拨打 110 或到就近派出所报案；通过国家反诈中心 App、12321 网络不良与垃圾信息举报受理中心举报。越早报警，止付成功率越高。',
      N'举报,110,12321,止付,证据', 80);
 END
+
+
+-- ==========================================================================
+-- 多租户改造（幂等）：user_id + user_key + isdeleted
+-- 统一用户键：u{user_id}:{username}；历史数据全部归属 root（u1001:root）
+-- ==========================================================================
+IF COL_LENGTH('dbo.analyses', 'user_id') IS NULL
+    ALTER TABLE dbo.analyses ADD user_id INT NULL;
+IF COL_LENGTH('dbo.analyses', 'user_key') IS NULL
+    ALTER TABLE dbo.analyses ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.analyses', 'isdeleted') IS NULL
+    ALTER TABLE dbo.analyses ADD isdeleted BIT NOT NULL CONSTRAINT DF_analyses_deleted DEFAULT 0;
+IF COL_LENGTH('dbo.analyses', 'deleted_at') IS NULL
+    ALTER TABLE dbo.analyses ADD deleted_at DATETIME2(0) NULL;
+
+IF COL_LENGTH('dbo.images', 'user_id') IS NULL
+    ALTER TABLE dbo.images ADD user_id INT NULL;
+IF COL_LENGTH('dbo.images', 'user_key') IS NULL
+    ALTER TABLE dbo.images ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.images', 'isdeleted') IS NULL
+    ALTER TABLE dbo.images ADD isdeleted BIT NOT NULL CONSTRAINT DF_images_deleted DEFAULT 0;
+
+IF COL_LENGTH('dbo.reports', 'user_id') IS NULL
+    ALTER TABLE dbo.reports ADD user_id INT NULL;
+IF COL_LENGTH('dbo.reports', 'user_key') IS NULL
+    ALTER TABLE dbo.reports ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.reports', 'isdeleted') IS NULL
+    ALTER TABLE dbo.reports ADD isdeleted BIT NOT NULL CONSTRAINT DF_reports_deleted DEFAULT 0;
+
+IF COL_LENGTH('dbo.logs', 'user_id') IS NULL
+    ALTER TABLE dbo.logs ADD user_id INT NULL;
+IF COL_LENGTH('dbo.logs', 'user_key') IS NULL
+    ALTER TABLE dbo.logs ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.logs', 'isdeleted') IS NULL
+    ALTER TABLE dbo.logs ADD isdeleted BIT NOT NULL CONSTRAINT DF_logs_deleted DEFAULT 0;
+
+IF COL_LENGTH('dbo.staging_contents', 'user_id') IS NULL
+    ALTER TABLE dbo.staging_contents ADD user_id INT NULL;
+IF COL_LENGTH('dbo.staging_contents', 'client_id') IS NULL
+    ALTER TABLE dbo.staging_contents ADD client_id NVARCHAR(64) NULL;
+IF COL_LENGTH('dbo.staging_contents', 'isdeleted') IS NULL
+    ALTER TABLE dbo.staging_contents ADD isdeleted BIT NOT NULL CONSTRAINT DF_staging_deleted DEFAULT 0;
+IF COL_LENGTH('dbo.staging_contents', 'expires_at') IS NULL
+    ALTER TABLE dbo.staging_contents ADD expires_at DATETIME2(0) NULL;
+
+IF COL_LENGTH('dbo.image_cases', 'user_id') IS NULL
+    ALTER TABLE dbo.image_cases ADD user_id INT NULL;
+IF COL_LENGTH('dbo.image_cases', 'user_key') IS NULL
+    ALTER TABLE dbo.image_cases ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.image_cases', 'isdeleted') IS NULL
+    ALTER TABLE dbo.image_cases ADD isdeleted BIT NOT NULL CONSTRAINT DF_image_cases_deleted DEFAULT 0;
+
+GO
+
+-- staging.user_key 从 client_id 升级为统一用户键，先扩长度
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.staging_contents')
+           AND name = 'user_key' AND max_length < 600)
+BEGIN
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_staging_user_time' AND object_id = OBJECT_ID('dbo.staging_contents'))
+        DROP INDEX IX_staging_user_time ON dbo.staging_contents;
+    ALTER TABLE dbo.staging_contents ALTER COLUMN user_key NVARCHAR(300) NOT NULL;
+END
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_staging_user_time' AND object_id = OBJECT_ID('dbo.staging_contents'))
+    CREATE INDEX IX_staging_user_time ON dbo.staging_contents(user_id, created_at DESC);
+
+GO
+
+-- 回填 root 租户
+UPDATE dbo.analyses SET user_id = 1001 WHERE user_id IS NULL;
+UPDATE dbo.analyses SET user_key = N'u1001:root' WHERE user_key IS NULL OR user_key = N'';
+UPDATE dbo.images SET user_id = 1001 WHERE user_id IS NULL;
+UPDATE dbo.images SET user_key = N'u1001:root' WHERE user_key IS NULL OR user_key = N'';
+UPDATE dbo.reports SET user_id = 1001 WHERE user_id IS NULL;
+UPDATE dbo.reports SET user_key = N'u1001:root' WHERE user_key IS NULL OR user_key = N'';
+UPDATE dbo.logs SET user_id = 1001 WHERE user_id IS NULL;
+UPDATE dbo.logs SET user_key = N'u1001:root' WHERE user_key IS NULL OR user_key = N'';
+UPDATE dbo.staging_contents SET user_id = 1001 WHERE user_id IS NULL;
+UPDATE dbo.staging_contents SET user_key = N'u1001:root' WHERE user_key NOT LIKE N'u%:%';
+UPDATE dbo.staging_contents SET expires_at = DATEADD(day, 7, created_at) WHERE expires_at IS NULL;
+UPDATE dbo.image_cases SET user_id = 1001 WHERE user_id IS NULL;
+UPDATE dbo.image_cases SET user_key = N'u1001:root' WHERE user_key IS NULL OR user_key = N'';
+
+GO
+
+-- 图片指纹唯一性从“全局”改为“按用户”
+IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_image_cases_hash'
+           AND parent_object_id = OBJECT_ID('dbo.image_cases'))
+    ALTER TABLE dbo.image_cases DROP CONSTRAINT UQ_image_cases_hash;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_image_cases_user_hash'
+               AND object_id = OBJECT_ID('dbo.image_cases'))
+    CREATE UNIQUE INDEX UX_image_cases_user_hash ON dbo.image_cases(user_id, sha256);
+
+GO
+
+-- 租户索引
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_analyses_user' AND object_id = OBJECT_ID('dbo.analyses'))
+    CREATE INDEX IX_analyses_user ON dbo.analyses(user_id, id DESC) INCLUDE (isdeleted, risk_level, risk_score);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_images_user' AND object_id = OBJECT_ID('dbo.images'))
+    CREATE INDEX IX_images_user ON dbo.images(user_id, analysis_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_reports_user' AND object_id = OBJECT_ID('dbo.reports'))
+    CREATE INDEX IX_reports_user ON dbo.reports(user_id, id DESC);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_logs_user' AND object_id = OBJECT_ID('dbo.logs'))
+    CREATE INDEX IX_logs_user ON dbo.logs(user_id, id DESC);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_image_cases_user' AND object_id = OBJECT_ID('dbo.image_cases'))
+    CREATE INDEX IX_image_cases_user ON dbo.image_cases(user_id, is_active, risk_score DESC);

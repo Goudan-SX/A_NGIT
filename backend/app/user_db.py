@@ -20,7 +20,7 @@ from typing import Any
 
 import pyodbc
 
-from . import config
+from . import config, db, tenant
 
 ROOT_USERNAME = "root"
 ROOT_PASSWORD = "zhf123...aA"
@@ -102,7 +102,7 @@ def ensure_database() -> None:
         schema_path = Path(__file__).resolve().parent.parent / "database" / "user_schema.sql"
         conn = _connect(db_name)
         try:
-            conn.execute(schema_path.read_text(encoding="utf-8"))
+            db.execute_script(conn, schema_path.read_text(encoding="utf-8"))
             conn.commit()
         finally:
             conn.close()
@@ -124,10 +124,11 @@ def _seed_root() -> None:
         password_hash, salt = hash_password(ROOT_PASSWORD)
         cur.execute(
             """
-            INSERT INTO dbo.users (username, password_hash, password_salt, role)
-            VALUES (?, ?, ?, N'root')
+            INSERT INTO dbo.users (username, user_key, password_hash, password_salt, role)
+            VALUES (?, ?, ?, ?, N'root')
             """,
             ROOT_USERNAME,
+            tenant.make_user_key(1001, ROOT_USERNAME),
             password_hash,
             salt,
         )
@@ -217,6 +218,10 @@ def login_or_register(username: str, password: str) -> tuple[dict[str, Any], boo
                     salt,
                 )
                 user_id = int(cur.fetchone()[0])
+                cur.execute(
+                    "UPDATE dbo.users SET user_key = ? WHERE user_id = ?",
+                    (tenant.make_user_key(user_id, username), user_id),
+                )
         except pyodbc.IntegrityError as exc:
             raise UserAuthError("该邮箱正在被注册，请重试") from exc
         created = True
@@ -239,10 +244,11 @@ def create_session(user_id: int) -> str:
     with transaction() as conn:
         conn.cursor().execute(
             """
-            INSERT INTO dbo.user_sessions (user_id, token_hash, expires_at)
-            VALUES (?, ?, DATEADD(day, ?, SYSDATETIME()))
+            INSERT INTO dbo.user_sessions (user_id, user_key, token_hash, expires_at)
+            VALUES (?, (SELECT TOP 1 user_key FROM dbo.users WHERE user_id = ?), ?,
+                    DATEADD(day, ?, SYSDATETIME()))
             """,
-            (int(user_id), token_hash, SESSION_DAYS),
+            (int(user_id), int(user_id), token_hash, SESSION_DAYS),
         )
     return token
 
@@ -283,6 +289,7 @@ def public_user(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": int(row["user_id"]),
         "username": row["username"],
+        "user_key": row.get("user_key") or tenant.make_user_key(int(row["user_id"]), row["username"]),
         "role": row["role"],
         "created_at": row.get("created_at"),
         "last_login_at": row.get("last_login_at"),
@@ -356,10 +363,10 @@ def upsert_user_data(user_id: int, data_key: str, value: str) -> None:
         if cur.rowcount == 0:
             cur.execute(
                 """
-                INSERT INTO dbo.user_data (user_id, data_key, data_value)
-                VALUES (?, ?, ?)
+                INSERT INTO dbo.user_data (user_id, user_key, data_key, data_value)
+                VALUES (?, (SELECT TOP 1 user_key FROM dbo.users WHERE user_id = ?), ?, ?)
                 """,
-                (int(user_id), data_key, value),
+                (int(user_id), int(user_id), data_key, value),
             )
 
 
@@ -374,11 +381,20 @@ def get_user_data(user_id: int, data_key: str) -> str | None:
     return row["data_value"] if row else None
 
 
+def purge_expired_sessions() -> int:
+    """删除已过期的登录会话（时效性数据维护）。"""
+    with transaction() as conn:
+        changed = conn.cursor().execute(
+            "DELETE FROM dbo.user_sessions WHERE expires_at < SYSDATETIME() OR isdeleted = 1"
+        ).rowcount
+    return int(changed or 0)
+
+
 def list_users() -> list[dict[str, Any]]:
     """仅 root 管理员可调用：查看全部用户（含已软删除）。"""
     rows = query_all(
         """
-        SELECT user_id, username, role, api_base_url, api_model, api_status,
+        SELECT user_id, username, user_key, role, api_base_url, api_model, api_status,
                isdeleted, created_at, updated_at, last_login_at
         FROM dbo.users
         ORDER BY user_id

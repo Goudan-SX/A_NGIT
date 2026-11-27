@@ -5,7 +5,7 @@
   'use strict';
 
   var API = window.AntiFraudAPI;
-  var state = { page: 1, size: 12, pages: 1, total: 0, current: null };
+  var state = { page: 1, size: 12, pages: 1, total: 0, current: null, deleted: false };
 
   function $(id) { return document.getElementById(id); }
   function setText(id, value) {
@@ -61,7 +61,8 @@
       size: String(state.size),
       keyword: keyword,
       level: level,
-      source: source
+      source: source,
+      deleted: state.deleted ? '1' : '0'
     });
     API.get('/api/history?' + params.toString()).then(function (data) {
       state.pages = data.pages || 1;
@@ -86,8 +87,10 @@
     var body = $('history-body');
     if (!body) return;
     if (!items.length) {
-      body.innerHTML = '<tr><td colspan="6" class="empty-state">' +
-        '<strong>暂无检测记录</strong><span>回到 AI 管家完成一次检测后，记录会自动保存在 SQL Server。</span></td></tr>';
+      body.innerHTML = state.deleted
+        ? '<tr><td colspan="6" class="empty-state"><strong>回收站为空</strong><span>删除的记录会在这里保留 30 天，可随时恢复。</span></td></tr>'
+        : '<tr><td colspan="6" class="empty-state">' +
+          '<strong>暂无检测记录</strong><span>回到 AI 管家完成一次检测后，记录会自动保存在 SQL Server。</span></td></tr>';
       return;
     }
     body.innerHTML = items.map(function (item) {
@@ -102,9 +105,11 @@
         escapeHtml(preview || summary || '—') + '</div></td>' +
         '<td>' + escapeHtml(sourceLabel(item.source)) + '</td>' +
         '<td><div class="data-table__actions">' +
-        '<button class="link-btn" data-action="detail" data-id="' + item.id + '" type="button">详情</button>' +
-        '<a class="link-btn" href="' + API.downloadUrl('/api/history/' + item.id + '/export') + '" target="_blank" rel="noopener">导出</a>' +
-        '<button class="link-btn link-btn--danger" data-action="delete" data-id="' + item.id + '" type="button">删除</button>' +
+        (state.deleted
+          ? '<button class="link-btn" data-action="restore" data-id="' + item.id + '" type="button">恢复</button>'
+          : '<button class="link-btn" data-action="detail" data-id="' + item.id + '" type="button">详情</button>' +
+            '<a class="link-btn" href="' + API.downloadUrl('/api/history/' + item.id + '/export') + '" target="_blank" rel="noopener">导出</a>' +
+            '<button class="link-btn link-btn--danger" data-action="delete" data-id="' + item.id + '" type="button">删除</button>') +
         '</div></td>' +
         '</tr>';
     }).join('');
@@ -229,14 +234,24 @@
   }
 
   function deleteRecord(id) {
-    if (!window.confirm('确定删除这条检测记录吗？关联的文件和举报材料也会一并删除。')) return;
+    if (!window.confirm('确定删除这条检测记录吗？记录会移入回收站，30 天内可恢复。')) return;
     API.remove('/api/history/' + id).then(function () {
-      toast('记录已删除', 'success');
+      toast('记录已移入回收站', 'success');
       closeModal();
       loadHistory();
       loadStats();
     }).catch(function (error) {
       toast('删除失败：' + error.message, 'error');
+    });
+  }
+
+  function restoreRecord(id) {
+    API.postJson('/api/history/' + id + '/restore', {}).then(function () {
+      toast('记录已恢复', 'success');
+      loadHistory();
+      loadStats();
+    }).catch(function (error) {
+      toast('恢复失败：' + error.message, 'error');
     });
   }
 
@@ -276,6 +291,16 @@
         loadHistory();
       });
     }
+    var recycle = $('recycle-btn');
+    if (recycle) {
+      recycle.addEventListener('click', function () {
+        state.deleted = !state.deleted;
+        state.page = 1;
+        recycle.textContent = state.deleted ? '返回记录' : '回收站';
+        recycle.setAttribute('aria-pressed', state.deleted ? 'true' : 'false');
+        loadHistory();
+      });
+    }
     var prev = $('prev-page');
     if (prev) prev.addEventListener('click', function () {
       if (state.page > 1) { state.page -= 1; loadHistory(); }
@@ -294,6 +319,7 @@
         var action = button.getAttribute('data-action');
         if (action === 'detail') openDetail(id);
         if (action === 'delete') deleteRecord(id);
+        if (action === 'restore') restoreRecord(id);
       });
     }
 

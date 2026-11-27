@@ -1085,9 +1085,13 @@
   var PENDING_CHAT_IMAGE_KEY = 'guardian_pending_chat_image';
   var incomingMediaIds = {};
 
+  function captureKey() {
+    return IMAGE_CAPTURE_KEY + ':' + (window.GuardianUserKey || 'u1001:root');
+  }
+
   function loadImageCaptures() {
     try {
-      return JSON.parse(localStorage.getItem(IMAGE_CAPTURE_KEY) || '[]');
+      return JSON.parse(localStorage.getItem(captureKey()) || '[]');
     } catch (error) {
       return [];
     }
@@ -1096,18 +1100,18 @@
   function saveImageCaptures(items) {
     var list = items.slice(0, 24);
     if (!list.length) {
-      localStorage.removeItem(IMAGE_CAPTURE_KEY);
+      localStorage.removeItem(captureKey());
       return true;
     }
     while (list.length) {
       try {
-        localStorage.setItem(IMAGE_CAPTURE_KEY, JSON.stringify(list));
+        localStorage.setItem(captureKey(), JSON.stringify(list));
         return true;
       } catch (error) {
         if (list.length === 1) {
           list[0].thumbnail = '';
           try {
-            localStorage.setItem(IMAGE_CAPTURE_KEY, JSON.stringify(list));
+            localStorage.setItem(captureKey(), JSON.stringify(list));
             return true;
           } catch (inner) {
             return false;
@@ -1259,7 +1263,7 @@
   function clearImageCaptures() {
     if (!loadImageCaptures().length) return;
     if (!window.confirm('确定清空所有图片采集吗？')) return;
-    localStorage.removeItem(IMAGE_CAPTURE_KEY);
+    localStorage.removeItem(captureKey());
     renderImageCaptures();
     toast('已清空图片采集', 'success');
   }
@@ -2275,6 +2279,11 @@
       setGuard('本地演示模式', false);
     });
   }
+
+  window.GuardianSetUserKey = function (key) {
+    window.GuardianUserKey = key || 'u1001:root';
+    renderImageCaptures();
+  };
 
   function init() {
     bindViews();

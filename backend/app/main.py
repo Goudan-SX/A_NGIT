@@ -30,8 +30,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from . import (ai_common, ai_policy, analyzer, case_library, case_matcher, config, content_store, db, deepseek,
-               conversation_store, guardian, monitor_state, ocr, qwen, repository, result_cache, runtime_ai,
-               security, transaction_risk, user_db)
+               conversation_store, guardian, maintenance, monitor_state, ocr, qwen, repository,
+               result_cache, runtime_ai, security, tenant, transaction_risk, user_db)
 from .text_normalize import preprocess_text
 
 STARTED_AT = time.time()
@@ -113,6 +113,13 @@ async def guardian_guard(request, call_next):
             return JSONResponse(status_code=401, content={"detail": "缺少或无效的本地访问令牌"})
     requested_external = request.headers.get("X-Guardian-External-AI", "true").lower() != "false"
     ai_policy.set_deepseek_allowed(security.external_ai_allowed(request) and requested_external)
+    # 租户上下文：带登录 cookie 用登录用户，否则（托盘/后台/未登录）统一回退 root。
+    token = request.cookies.get(user_db.COOKIE_NAME)
+    try:
+        user = user_db.resolve_session(token) if token else None
+    except Exception:  # noqa: BLE001 - 用户库异常不阻断既有本地功能
+        user = None
+    tenant.set_user(user)
     return await call_next(request)
 
 
@@ -525,6 +532,22 @@ def api_admin_users(request: Request) -> dict[str, Any]:
     if not user or user.get("role") != "root":
         raise HTTPException(status_code=403, detail="需要 root 管理员权限")
     return {"ok": True, "items": user_db.list_users()}
+
+
+@app.post("/api/admin/maintenance")
+def api_admin_maintenance(request: Request) -> dict[str, Any]:
+    """root 专用：执行预设的时效性数据清理（过期会话/暂存/自动案例/回收站）。"""
+    user = _current_user(request)
+    if not user or user.get("role") != "root":
+        raise HTTPException(status_code=403, detail="需要 root 管理员权限")
+    try:
+        result = maintenance.run_all()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"维护任务失败：{exc}") from exc
+    _log_safe(level="success", event="maintenance", message="执行数据库维护任务",
+              meta=result)
+    return {"ok": True, "result": result}
+
 
 @app.get("/api/knowledge")
 def api_knowledge() -> dict[str, Any]:
@@ -1495,10 +1518,12 @@ def api_history(
     keyword: str = "",
     level: str = "",
     source: str = "",
+    deleted: bool = False,
 ) -> dict[str, Any]:
     try:
         return {"ok": True, **repository.list_analyses(
-            page=page, size=size, keyword=keyword.strip(), level=level, source=source
+            page=page, size=size, keyword=keyword.strip(), level=level, source=source,
+            deleted_only=deleted,
         )}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"读取历史记录失败：{exc}") from exc
@@ -1518,6 +1543,15 @@ def api_history_delete(analysis_id: int) -> dict[str, Any]:
     if not repository.delete_analysis(analysis_id):
         raise HTTPException(status_code=404, detail="记录不存在")
     _log_safe(level="info", event="delete", message=f"删除分析记录 #{analysis_id}")
+    return {"ok": True}
+
+
+@app.post("/api/history/{analysis_id}/restore")
+def api_history_restore(analysis_id: int) -> dict[str, Any]:
+    """从回收站恢复误删的分析记录（软删除，isdeleted=1 → 0）。"""
+    if not repository.restore_analysis(analysis_id):
+        raise HTTPException(status_code=404, detail="回收站中没有该记录")
+    _log_safe(level="info", event="restore", message=f"恢复分析记录 #{analysis_id}")
     return {"ok": True}
 
 
@@ -1618,8 +1652,30 @@ def _safe_media_path(directory, filename: str):
     return path
 
 
+def _assert_media_owner(filename: str, *, thumbnail: bool = False) -> None:
+    """媒体文件也必须按租户隔离，禁止通过猜文件名跨用户读取。"""
+    name = Path(filename).name
+    user_id = tenant.user_id()
+    if thumbnail:
+        row = db.query_one(
+            "SELECT TOP 1 id FROM dbo.images WHERE thumb_name = ? AND user_id = ? AND isdeleted = 0",
+            [name, user_id],
+        )
+    else:
+        row = db.query_one(
+            "SELECT TOP 1 id FROM dbo.images WHERE stored_name = ? AND user_id = ? AND isdeleted = 0",
+            [name, user_id],
+        ) or db.query_one(
+            "SELECT TOP 1 id FROM dbo.staging_contents WHERE stored_name = ? AND user_id = ? AND isdeleted = 0",
+            [name, user_id],
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="媒体文件不存在")
+
+
 @app.get("/api/media/thumbnail/{filename}")
 def media_thumbnail(filename: str, _: None = Depends(security.verify_token)):
+    _assert_media_owner(filename, thumbnail=True)
     path = _safe_media_path(config.THUMB_DIR, filename)
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(
@@ -1633,6 +1689,7 @@ def media_thumbnail(filename: str, _: None = Depends(security.verify_token)):
 
 @app.get("/api/media/original/{filename}")
 def media_original(filename: str, _: None = Depends(security.verify_token)):
+    _assert_media_owner(filename)
     path = _safe_media_path(config.UPLOAD_DIR, filename)
     return FileResponse(
         path,

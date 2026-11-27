@@ -58,12 +58,14 @@
     var name = $('auth-account-name');
     var role = $('auth-account-role');
     var idEl = $('auth-account-id');
+    var keyEl = $('auth-account-key');
     var apiEl = $('auth-account-api');
     var lastEl = $('auth-account-last');
     var avatar = $('auth-account-avatar');
     if (name) name.textContent = user.username;
     if (role) role.textContent = user.role === 'root' ? 'root 管理员' : '普通用户';
     if (idEl) idEl.textContent = '#' + user.id;
+    if (keyEl) keyEl.textContent = user.user_key || ('u' + user.id + ':' + String(user.username).toLowerCase());
     if (apiEl) {
       apiEl.textContent = cfg && cfg.configured
         ? (cfg.status === 'error' ? '连接异常（请到 API 页检查）' : apiLabel(cfg))
@@ -157,6 +159,9 @@
 
   function renderUser(user) {
     auth.user = user || null;
+    var dataKey = user && user.user_key ? user.user_key : 'u1001:root';
+    window.GuardianUserKey = dataKey;
+    if (window.GuardianSetUserKey) window.GuardianSetUserKey(dataKey);
     var guest = $('user-guest');
     var chip = $('user-chip');
     if (user) {

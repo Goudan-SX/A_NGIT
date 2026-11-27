@@ -6,7 +6,7 @@ import random
 from datetime import datetime
 from typing import Any
 
-from . import analyzer, db
+from . import analyzer, db, tenant
 
 
 def _loads(value: str | None) -> dict[str, Any]:
@@ -23,16 +23,20 @@ def save_analysis(*, source: str, input_text: str, note: str | None,
                   result: dict[str, Any], images: list[dict[str, Any]] | None = None,
                   duration_ms: int = 0) -> int:
     engine = (result.get("engine") or {}).get("name", "local-rule-v1")
+    user_id = tenant.user_id()
+    user_key = tenant.user_key()
     with db.transaction() as conn:
         cur = conn.cursor()
         cur.execute(
             """
             INSERT INTO dbo.analyses
-                (source, input_text, note, risk_score, risk_level, scam_type,
+                (user_id, user_key, source, input_text, note, risk_score, risk_level, scam_type,
                  summary, result_json, engine, duration_ms)
             OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
+            user_id,
+            user_key,
             source,
             input_text or "",
             note,
@@ -50,11 +54,13 @@ def save_analysis(*, source: str, input_text: str, note: str | None,
             cur.execute(
                 """
                 INSERT INTO dbo.images
-                    (analysis_id, original_name, stored_name, thumb_name, media_type,
+                    (user_id, user_key, analysis_id, original_name, stored_name, thumb_name, media_type,
                      content_type, size_bytes, width, height, sha256, risk_score,
                      ocr_text, detail_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
+                user_id,
+                user_key,
                 analysis_id,
                 image.get("original_name", ""),
                 image.get("stored_name", ""),
@@ -94,11 +100,11 @@ def _brief(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_analyses(*, page: int = 1, size: int = 12, keyword: str = "",
-                  level: str = "", source: str = "") -> dict[str, Any]:
+                  level: str = "", source: str = "", deleted_only: bool = False) -> dict[str, Any]:
     page = max(1, page)
     size = max(1, min(50, size))
-    where = ["1 = 1"]
-    params: list[Any] = []
+    where = ["user_id = ?", "isdeleted = 1" if deleted_only else "isdeleted = 0"]
+    params: list[Any] = [tenant.user_id()]
     if keyword:
         where.append("(input_text LIKE ? OR summary LIKE ? OR scam_type LIKE ? OR note LIKE ?)")
         like = f"%{keyword}%"
@@ -141,9 +147,9 @@ def get_analysis(analysis_id: int) -> dict[str, Any] | None:
         SELECT id, created_at, source, input_text, note, risk_score, risk_level,
                scam_type, summary, result_json, engine, duration_ms,
                is_false_positive, feedback_note, report_count
-        FROM dbo.analyses WHERE id = ?
+        FROM dbo.analyses WHERE id = ? AND user_id = ? AND isdeleted = 0
         """,
-        [analysis_id],
+        [analysis_id, tenant.user_id()],
     )
     if not row:
         return None
@@ -162,23 +168,68 @@ def get_analysis(analysis_id: int) -> dict[str, Any] | None:
         """
         SELECT id, original_name, stored_name, thumb_name, media_type, content_type,
                size_bytes, width, height, sha256, risk_score, created_at
-        FROM dbo.images WHERE analysis_id = ? ORDER BY id
+        FROM dbo.images WHERE analysis_id = ? AND user_id = ? AND isdeleted = 0 ORDER BY id
         """,
-        [analysis_id],
+        [analysis_id, tenant.user_id()],
     )
     result["images"] = images
     return result
 
 
 def delete_analysis(analysis_id: int) -> bool:
-    affected = db.execute("DELETE FROM dbo.analyses WHERE id = ?", [analysis_id])
-    return affected > 0
+    """软删除：写入 isdeleted/deleted_at，可由回收站恢复。"""
+    user_id = tenant.user_id()
+    with db.transaction() as conn:
+        cur = conn.cursor()
+        affected = cur.execute(
+            """
+            UPDATE dbo.analyses
+            SET isdeleted = 1, deleted_at = SYSDATETIME()
+            WHERE id = ? AND user_id = ? AND isdeleted = 0
+            """,
+            (analysis_id, user_id),
+        ).rowcount
+        if affected:
+            cur.execute(
+                "UPDATE dbo.images SET isdeleted = 1 WHERE analysis_id = ? AND user_id = ?",
+                (analysis_id, user_id),
+            )
+            cur.execute(
+                "UPDATE dbo.reports SET isdeleted = 1 WHERE analysis_id = ? AND user_id = ?",
+                (analysis_id, user_id),
+            )
+    return bool(affected)
+
+
+def restore_analysis(analysis_id: int) -> bool:
+    """从回收站恢复一条被软删除的分析记录。"""
+    user_id = tenant.user_id()
+    with db.transaction() as conn:
+        cur = conn.cursor()
+        affected = cur.execute(
+            """
+            UPDATE dbo.analyses
+            SET isdeleted = 0, deleted_at = NULL
+            WHERE id = ? AND user_id = ? AND isdeleted = 1
+            """,
+            (analysis_id, user_id),
+        ).rowcount
+        if affected:
+            cur.execute(
+                "UPDATE dbo.images SET isdeleted = 0 WHERE analysis_id = ? AND user_id = ?",
+                (analysis_id, user_id),
+            )
+            cur.execute(
+                "UPDATE dbo.reports SET isdeleted = 0 WHERE analysis_id = ? AND user_id = ?",
+                (analysis_id, user_id),
+            )
+    return bool(affected)
 
 
 def set_feedback(analysis_id: int, is_false_positive: bool, note: str = "") -> bool:
     affected = db.execute(
-        "UPDATE dbo.analyses SET is_false_positive = ?, feedback_note = ? WHERE id = ?",
-        [1 if is_false_positive else 0, note, analysis_id],
+        "UPDATE dbo.analyses SET is_false_positive = ?, feedback_note = ? WHERE id = ? AND user_id = ?",
+        [1 if is_false_positive else 0, note, analysis_id, tenant.user_id()],
     )
     return affected > 0
 
@@ -187,14 +238,19 @@ def save_report(*, analysis_id: int, channel: str, title: str, content: str,
                 status: str = "submitted") -> dict[str, Any]:
     stamp = datetime.now().strftime("%Y%m%d%H%M%S")
     report_no = f"AF{stamp}{random.randint(100, 999)}"
+    user_id = tenant.user_id()
+    user_key = tenant.user_key()
     with db.transaction() as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO dbo.reports (report_no, analysis_id, channel, title, content, status)
+            INSERT INTO dbo.reports
+                (user_id, user_key, report_no, analysis_id, channel, title, content, status)
             OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
+            user_id,
+            user_key,
             report_no,
             analysis_id,
             channel,
@@ -203,7 +259,10 @@ def save_report(*, analysis_id: int, channel: str, title: str, content: str,
             status,
         )
         report_id = int(cur.fetchone()[0])
-        cur.execute("UPDATE dbo.analyses SET report_count = report_count + 1 WHERE id = ?", analysis_id)
+        cur.execute(
+            "UPDATE dbo.analyses SET report_count = report_count + 1 WHERE id = ? AND user_id = ?",
+            (analysis_id, user_id),
+        )
     return {
         "id": report_id,
         "report_no": report_no,
@@ -220,9 +279,9 @@ def get_report(report_id: int) -> dict[str, Any] | None:
     return db.query_one(
         """
         SELECT id, report_no, analysis_id, channel, title, content, status, created_at
-        FROM dbo.reports WHERE id = ?
+        FROM dbo.reports WHERE id = ? AND user_id = ? AND isdeleted = 0
         """,
-        [report_id],
+        [report_id, tenant.user_id()],
     )
 
 
@@ -230,9 +289,9 @@ def list_reports(analysis_id: int) -> list[dict[str, Any]]:
     return db.query_all(
         """
         SELECT id, report_no, analysis_id, channel, title, status, created_at
-        FROM dbo.reports WHERE analysis_id = ? ORDER BY id DESC
+        FROM dbo.reports WHERE analysis_id = ? AND user_id = ? AND isdeleted = 0 ORDER BY id DESC
         """,
-        [analysis_id],
+        [analysis_id, tenant.user_id()],
     )
 
 
@@ -240,18 +299,19 @@ def add_log(*, level: str, event: str, message: str,
             meta: dict[str, Any] | None = None, duration_ms: int | None = None) -> None:
     db.execute(
         """
-        INSERT INTO dbo.logs (level, event, message, meta_json, duration_ms)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO dbo.logs (user_id, user_key, level, event, message, meta_json, duration_ms)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        [level, event, message[:1000], db.json_dumps(meta or {}), duration_ms],
+        [tenant.user_id(), tenant.user_key(), level, event, message[:1000],
+         db.json_dumps(meta or {}), duration_ms],
     )
 
 
 def list_logs(*, page: int = 1, size: int = 30, level: str = "", event: str = "") -> dict[str, Any]:
     page = max(1, page)
     size = max(1, min(100, size))
-    where = ["1 = 1"]
-    params: list[Any] = []
+    where = ["user_id = ?", "isdeleted = 0"]
+    params: list[Any] = [tenant.user_id()]
     if level in {"info", "success", "warning", "error"}:
         where.append("level = ?")
         params.append(level)
@@ -281,8 +341,15 @@ def list_logs(*, page: int = 1, size: int = 30, level: str = "", event: str = ""
 
 
 def log_stats() -> dict[str, Any]:
-    rows = db.query_all("SELECT level, COUNT_BIG(*) AS count FROM dbo.logs GROUP BY level")
-    total_row = db.query_one("SELECT COUNT_BIG(*) AS total FROM dbo.logs") or {}
+    user_id = tenant.user_id()
+    rows = db.query_all(
+        "SELECT level, COUNT_BIG(*) AS count FROM dbo.logs WHERE user_id = ? AND isdeleted = 0 GROUP BY level",
+        [user_id],
+    )
+    total_row = db.query_one(
+        "SELECT COUNT_BIG(*) AS total FROM dbo.logs WHERE user_id = ? AND isdeleted = 0",
+        [user_id],
+    ) or {}
     counts = {row["level"]: int(row["count"]) for row in rows}
     return {
         "total": int(total_row.get("total") or 0),
@@ -296,6 +363,7 @@ def log_stats() -> dict[str, Any]:
 
 
 def stats() -> dict[str, Any]:
+    user_id = tenant.user_id()
     overview = db.query_one(
         """
         SELECT
@@ -304,31 +372,42 @@ def stats() -> dict[str, Any]:
             SUM(CASE WHEN is_false_positive = 1 THEN 1 ELSE 0 END) AS false_positive,
             SUM(CASE WHEN CAST(created_at AS DATE) = CAST(SYSDATETIME() AS DATE) THEN 1 ELSE 0 END) AS today
         FROM dbo.analyses
-        """
+        WHERE user_id = ? AND isdeleted = 0
+        """,
+        [user_id],
     ) or {}
     levels = db.query_all(
-        "SELECT risk_level AS level, COUNT_BIG(*) AS count FROM dbo.analyses GROUP BY risk_level"
+        "SELECT risk_level AS level, COUNT_BIG(*) AS count FROM dbo.analyses WHERE user_id = ? AND isdeleted = 0 GROUP BY risk_level",
+        [user_id],
     )
     sources = db.query_all(
-        "SELECT source, COUNT_BIG(*) AS count FROM dbo.analyses GROUP BY source"
+        "SELECT source, COUNT_BIG(*) AS count FROM dbo.analyses WHERE user_id = ? AND isdeleted = 0 GROUP BY source",
+        [user_id],
     )
     pii_row = db.query_one(
         """
         SELECT COUNT_BIG(*) AS count FROM dbo.analyses
-        WHERE ISJSON(result_json) = 1 AND JSON_QUERY(result_json, '$.pii') <> '[]'
-        """
+        WHERE user_id = ? AND isdeleted = 0
+          AND ISJSON(result_json) = 1 AND JSON_QUERY(result_json, '$.pii') <> '[]'
+        """,
+        [user_id],
     ) or {}
-    reports = db.query_one("SELECT COUNT_BIG(*) AS count FROM dbo.reports") or {}
+    reports = db.query_one(
+        "SELECT COUNT_BIG(*) AS count FROM dbo.reports WHERE user_id = ? AND isdeleted = 0",
+        [user_id],
+    ) or {}
     trend = db.query_all(
         """
         SELECT CONVERT(varchar(10), created_at, 120) AS day,
                COUNT_BIG(*) AS count,
                SUM(CASE WHEN risk_level IN ('high', 'critical') THEN 1 ELSE 0 END) AS high
         FROM dbo.analyses
-        WHERE created_at >= DATEADD(day, -6, CAST(SYSDATETIME() AS DATE))
+        WHERE user_id = ? AND isdeleted = 0
+          AND created_at >= DATEADD(day, -6, CAST(SYSDATETIME() AS DATE))
         GROUP BY CONVERT(varchar(10), created_at, 120)
         ORDER BY day
-        """
+        """,
+        [user_id],
     )
     return {
         "total": int(overview.get("total") or 0),

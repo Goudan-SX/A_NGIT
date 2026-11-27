@@ -92,3 +92,35 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes
                WHERE name = 'UX_user_data_tenant_key' AND object_id = OBJECT_ID('dbo.user_data'))
     CREATE UNIQUE INDEX UX_user_data_tenant_key ON dbo.user_data(user_id, data_key)
         WHERE isdeleted = 0;
+
+
+-- ==========================================================================
+-- 统一租户键：u{user_id}:{username}（幂等）
+-- ==========================================================================
+IF COL_LENGTH('dbo.users', 'user_key') IS NULL
+    ALTER TABLE dbo.users ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.user_sessions', 'user_key') IS NULL
+    ALTER TABLE dbo.user_sessions ADD user_key NVARCHAR(300) NULL;
+IF COL_LENGTH('dbo.user_data', 'user_key') IS NULL
+    ALTER TABLE dbo.user_data ADD user_key NVARCHAR(300) NULL;
+
+GO
+
+UPDATE dbo.users
+SET user_key = CONCAT(N'u', user_id, N':', LOWER(username))
+WHERE user_key IS NULL OR user_key = N'';
+
+UPDATE dbo.user_sessions
+SET user_key = (SELECT TOP 1 u.user_key FROM dbo.users u WHERE u.user_id = dbo.user_sessions.user_id)
+WHERE user_key IS NULL OR user_key = N'';
+
+UPDATE dbo.user_data
+SET user_key = (SELECT TOP 1 u.user_key FROM dbo.users u WHERE u.user_id = dbo.user_data.user_id)
+WHERE user_key IS NULL OR user_key = N'';
+
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_users_userkey' AND object_id = OBJECT_ID('dbo.users'))
+    CREATE INDEX IX_users_userkey ON dbo.users(user_key) INCLUDE (user_id, role, isdeleted);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_user_data_userkey' AND object_id = OBJECT_ID('dbo.user_data'))
+    CREATE INDEX IX_user_data_userkey ON dbo.user_data(user_key, data_key, isdeleted);

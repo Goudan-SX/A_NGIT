@@ -98,6 +98,16 @@ DB_ENCRYPT=no
 
 所有租户查询都强制带 `user_id`，并为 `user_id` 建立索引；用户 ID 从 1001 起自增且不回收。内置管理员测试账号：`root` / `zhf123...aA`，仅 root 可访问 `/api/admin/users`。
 
+统一数据键：`u{user_id}:{username}`（如 `u1001:root`）；对话键为 `{user_key}:c:{contact_id}`。历史数据在首次启动时自动迁移到 root 租户；`analyses/images/reports/logs/staging_contents` 均带 `user_id/user_key`。
+
+时效性数据维护：
+
+```bash
+python -m backend.app.maintenance     # 或 POST /api/admin/maintenance（仅 root）
+```
+
+会清理过期对话（1 天）、过期登录会话、过期暂存（默认 7 天）、90 天前自动收录案例，以及回收站中超过 30 天的记录。历史记录页可切换到“回收站”恢复误删记录。
+
 ### 3.4 安全配置（选填，默认自动生成）
 
 ```
