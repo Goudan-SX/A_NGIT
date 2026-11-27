@@ -52,17 +52,24 @@ def health() -> bool:
         return False
 
 
+def hidden_kwargs() -> dict:
+    info = subprocess.STARTUPINFO()
+    info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    info.wShowWindow = 0
+    return {"startupinfo": info, "creationflags": 0x08000000}
+
+
 def start_backend() -> bool:
     if health():
         return True
     log("启动后端")
     with (ROOT / "backend" / "data" / "backend.log").open("ab") as output:
         subprocess.Popen(
-            [str(PYTHON), "-m", "uvicorn", "backend.app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+            [str(PYTHONW), "-m", "uvicorn", "backend.app.main:app", "--host", "127.0.0.1", "--port", "8000"],
             cwd=str(ROOT),
             stdout=output,
             stderr=subprocess.STDOUT,
-            creationflags=0x08000000,
+            **hidden_kwargs(),
         )
     for _ in range(40):
         if health():
@@ -112,7 +119,7 @@ def start_tray() -> None:
     subprocess.Popen(
         [str(PYTHONW), str(ROOT / "backend" / "desktop" / "guardian_tray.py")],
         cwd=str(ROOT),
-        creationflags=0x08000000,
+        **hidden_kwargs(),
     )
 
 
