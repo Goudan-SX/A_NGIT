@@ -136,6 +136,53 @@ SIGNALS: list[dict[str, Any]] = [
         "patterns": [r"(名额有限|最后\s*\d+\s*个|仅限今天|限时抢购|先到先得)"],
     },
 
+    # ---------------- 贷款/征信包装诈骗 ----------------
+    {
+        "id": "credit_repair",
+        "label": "征信包装/修复话术",
+        "dim": "financial",
+        "weight": 25,
+        "severity": "critical",
+        "scam_types": ["网络贷款", "冒充客服退款"],
+        "patterns": [r"(征信.{0,8}(花|差|不好|有问题).{0,20}(处理|修复|包装|洗白)|包装征信|征信修复|征信洗白|征信养一养)"],
+    },
+    {
+        "id": "nonbank_loan",
+        "label": "绕开银行内部渠道",
+        "dim": "channel",
+        "weight": 15,
+        "severity": "high",
+        "scam_types": ["网络贷款"],
+        "patterns": [r"(不走银行|不走正规|内部渠道|合作渠道|特殊渠道|非银行|线下渠道|银行那套流程)"],
+    },
+    {
+        "id": "no_verification_loan",
+        "label": "免审核贷款承诺",
+        "dim": "financial",
+        "weight": 25,
+        "severity": "critical",
+        "scam_types": ["网络贷款"],
+        "patterns": [r"(不看流水|不看负债|不查征信|无需审核|免审核|当天.{0,6}出额度|当天下款|最快当天|包下款|百分百下款|必下款)"],
+    },
+    {
+        "id": "id_card_photo",
+        "label": "索取身份证银行卡照片",
+        "dim": "info",
+        "weight": 25,
+        "severity": "critical",
+        "scam_types": ["信息窃取", "网络贷款"],
+        "patterns": [r"(身份证.{0,12}(拍|照片|正反面|发给我)|银行卡.{0,12}(拍|照片|发给我)|身份证和银行卡|证件照|手持身份证)"],
+    },
+    {
+        "id": "no_fee_guarantee",
+        "label": "过不了不收费话术",
+        "dim": "script",
+        "weight": 10,
+        "severity": "medium",
+        "scam_types": ["网络贷款"],
+        "patterns": [r"(过不了.{0,8}不收费|不成功不收费|下款前不收费|前期不收费|办不下来不收费)"],
+    },
+
     # ---------------- 会员扣费/取消订阅钓鱼 ----------------
     {
         "id": "subscription_fee",

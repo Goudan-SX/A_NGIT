@@ -211,6 +211,45 @@ def collect_chat_texts(control, pane_left: int, top_y: int, deadline: float,
     return rows
 
 
+def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tuple[str, list[str]] | None:
+    """WeChat 等自绘窗口 UIA 读不到文字时，只 OCR 聊天主区域。"""
+    global _last_ocr_at
+    now = time.time()
+    if now - _last_ocr_at < 10:
+        return None
+    _last_ocr_at = now
+    left, top, right, bottom = rect
+    crop = (left + int((right - left) * 0.25), top + 25, right, bottom)
+    from PIL import ImageGrab
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
+        path = handle.name
+    try:
+        ImageGrab.grab(bbox=crop).save(path, "PNG")
+        text = ocr.extract_text(path, timeout=20)
+    except Exception:  # noqa: BLE001
+        text = ""
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    if not lines:
+        return None
+    contact = window_title or "未知用户"
+    if len(lines[0]) <= 60 and not re.fullmatch(r"\d{1,2}:\d{2}", lines[0]):
+        contact = lines[0][:60]
+        lines = lines[1:]
+    messages = []
+    for value in lines:
+        value = re.sub(r"^\d{1,2}:\d{2}\s*", "", value).strip()
+        if value and value not in {"发送", "搜索", "长按鼠标", "语音输入", "表情", "微信"}:
+            messages.append(value[:500])
+    if not messages:
+        return None
+    return contact, messages[-20:]
+
+
 def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
     """只读取当前聊天主区域：过滤左侧会话栏/搜索栏，保留不同消息文本。"""
     try:
@@ -222,7 +261,7 @@ def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
         pane_left = left + max(240, int((right - left) * 0.25))
         texts = collect_chat_texts(top, pane_left, top_y + 35, time.monotonic() + 0.5)
         if not texts:
-            return None
+            return ocr_chat_snapshot(rect, window_title)
         texts.sort(key=lambda item: (item[0], item[1]))
         header = []
         messages = []
@@ -247,7 +286,7 @@ def read_chat_snapshot(window_title: str) -> tuple[str, list[str]] | None:
             total += len(value)
         cleaned.reverse()
         if not cleaned:
-            return None
+            return ocr_chat_snapshot(rect, window_title)
         return contact, cleaned
     except Exception:  # noqa: BLE001
         return None

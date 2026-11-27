@@ -30,4 +30,4 @@ if ($null -eq $engine) {
 }
 
 $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-Write-Output $result.Text
+$result.Lines | ForEach-Object { $_.Text }
