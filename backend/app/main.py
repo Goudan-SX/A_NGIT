@@ -606,30 +606,48 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
 
 
 def _refine_monitor(payload: MonitorAnalyzeRequest) -> None:
-    """后台 AI 二次审查；不阻塞托盘首次返回。"""
+    """后台 AI 二次审查：基于累积上下文，以 AI 确认值为最终风险值。
+
+    流程：先把当前 OCR 文本合并入库（保留对方所有历史消息）→ 取完整累积
+    文本 → AI 复审 → 更新库存 AI 最终结果 → 推送可疑片段到 Web。
+    """
     try:
-        result, match = _analyze_text_with_case(payload.text, skip_ai=False, force_ai=True)
-        result = analyzer.build_hit_contract(result, payload.text)
+        contact = (payload.window or "").strip()
+        if not contact or contact in GENERIC_CONTACT_NAMES:
+            return
+        # 1. 先把当前 OCR 文本合并入库（save 内部按行去重，保留全部历史）
+        fast_result, _ = _analyze_text_with_case(payload.text, skip_ai=True)
+        conversation_store.save(
+            contact_id=contact,
+            contact_name=contact,
+            window_title=contact,
+            text=payload.text,
+            result=fast_result,
+        )
+        # 2. 取合并后的完整累积文本供 AI 阅读上下文
+        full_text = conversation_store.get_full_text(contact)
+        # 3. AI 基于完整累积上下文复审（force_ai=True 强制精判）
+        result, match = _analyze_text_with_case(full_text, skip_ai=False, force_ai=True)
+        result = analyzer.build_hit_contract(result, full_text)
         result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         result["match"] = match
-        safe_text = analyzer.mask_text(payload.text, result)
         time.sleep(0.8)
+        # 4. 更新库存 AI 最终结果（text 保持完整累积文本，全量入库无门槛）
+        conversation_store.save(
+            contact_id=contact,
+            contact_name=contact,
+            window_title=contact,
+            text=full_text,
+            result=result,
+        )
+        # 5. Web 只展示可疑片段，不全显原文（隐私保护）
+        snippets = analyzer.extract_suspicious_snippets(full_text, result)
         monitor_state.publish(
-            text=safe_text,
+            text=snippets,
             result=result,
             source="tray-ai",
-            window=payload.window,
+            window=contact,
         )
-        # 防御：通用名称/空值不落库，避免生成错误用户（如把软件名当联系人）。
-        contact = (payload.window or "").strip()
-        if contact and contact not in GENERIC_CONTACT_NAMES:
-            conversation_store.save(
-                contact_id=contact,
-                contact_name=contact,
-                window_title=contact,
-                text=safe_text,
-                result=result,
-            )
     except Exception:  # noqa: BLE001
         pass
 
@@ -676,9 +694,10 @@ def api_monitor_analyze(payload: MonitorAnalyzeRequest, background: BackgroundTa
 
 @app.post("/api/monitor/publish")
 def api_monitor_publish(payload: MonitorPublishRequest) -> dict[str, Any]:
-    safe_text = analyzer.mask_text(payload.text, payload.result)
+    # Web 只展示可疑片段，不全显原文（隐私保护）
+    snippets = analyzer.extract_suspicious_snippets(payload.text, payload.result)
     item = monitor_state.publish(
-        text=safe_text,
+        text=snippets,
         result=payload.result,
         source=payload.source,
         window=payload.window,

@@ -426,8 +426,11 @@
     lastMonitorId = item.id || '';
     var input = $('chat-text');
     if (input) {
-      input.value = item.text || '';
-      updateChatStats();
+      // 只展示可疑片段；无可疑时保留当前内容不清空
+      if (item.text) {
+        input.value = item.text;
+        updateChatStats();
+      }
     }
     // 托盘结果优先：让当前在途的手动分析失效，避免旧请求把 89% 覆盖成“—”。
     state.analyzeSeq += 1;
@@ -2042,7 +2045,7 @@
       switchView('monitor');
       var input = $('chat-text');
       if (input) {
-        input.value = item.text || '';
+        input.value = item.text || '（该对话未检测到可疑话术）';
         updateChatStats();
       }
       state.analysis = item.result || {};

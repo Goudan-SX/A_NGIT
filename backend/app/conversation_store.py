@@ -1,4 +1,8 @@
-"""临时对话库：按对方 id 隔离保存，1 天 TTL。"""
+"""临时对话库：按对方 id 隔离保存，1 天 TTL。
+
+需求约定：对方所有聊天数据都入临时库（无分数门槛），按行去重合并保留
+完整历史，供 AI 阅读累积上下文并实时更新风险值。
+"""
 from __future__ import annotations
 
 import json
@@ -7,8 +11,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .analyzer import extract_suspicious_snippets
+
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "conversations.db"
-MIN_STORE_SCORE = 40
 TTL_DAYS = 1
 
 
@@ -41,6 +46,31 @@ def _init(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _merge_texts(old: str, new: str) -> str:
+    """按行去重合并，保留对方所有历史消息（窗口滚动后旧消息不丢失）。"""
+    if not old or not new:
+        return new or old
+    old_lines = [line for line in old.splitlines() if line.strip()]
+    new_lines = [line for line in new.splitlines() if line.strip()]
+    if not old_lines:
+        return new
+    seen = set(old_lines)
+    merged = list(old_lines)
+    for line in new_lines:
+        if line not in seen:
+            merged.append(line)
+            seen.add(line)
+    return "\n".join(merged)
+
+
+def get_full_text(contact_id: str) -> str:
+    """返回某联系人的完整累积文本（供 AI 阅读上下文，不脱敏、不过滤）。"""
+    with _connect() as conn:
+        _init(conn)
+        row = conn.execute("SELECT text FROM conversations WHERE contact_id = ?", [contact_id]).fetchone()
+        return str(row["text"] or "") if row else ""
+
+
 def cleanup() -> None:
     now = datetime.now().isoformat(sep=" ", timespec="seconds")
     with _connect() as conn:
@@ -50,17 +80,19 @@ def cleanup() -> None:
 
 def save(*, contact_id: str, contact_name: str, window_title: str, text: str,
          result: dict[str, Any]) -> bool:
-    """只保存可能含诈骗信息的数据；同一联系人始终以最新一次为准。
+    """保存对方聊天数据；同一联系人按行去重合并，保留全部历史消息。
 
-    需求约定：重复内容相似度 >=90% 时以最新数据为准。UPSERT 覆盖
-    （text/risk_score/summary 等）天然满足该约定，无需单独分支。
+    需求：对方所有聊天数据都入临时库（无分数门槛），累积上下文供 AI 阅读。
+    text 做增量合并，result/score 以最新 AI 确认值为准（UPSERT 覆盖）。
     """
-    score = int(result.get("risk_score", 0))
-    if score < MIN_STORE_SCORE or not text.strip():
+    if not text.strip():
         return False
+    score = int(result.get("risk_score", 0))
     now = datetime.now()
     with _connect() as conn:
         _init(conn)
+        row = conn.execute("SELECT text FROM conversations WHERE contact_id = ?", [contact_id]).fetchone()
+        merged = _merge_texts(str(row["text"] or "") if row else "", text)
         conn.execute(
             """
             INSERT INTO conversations
@@ -80,7 +112,7 @@ def save(*, contact_id: str, contact_name: str, window_title: str, text: str,
                 expires_at=excluded.expires_at
             """,
             [
-                contact_id, contact_name, window_title, text, score,
+                contact_id, contact_name, window_title, merged, score,
                 result.get("risk_level"), result.get("risk_label"),
                 str(result.get("summary", ""))[:1000],
                 json.dumps(result, ensure_ascii=False),
@@ -119,6 +151,9 @@ def get(contact_id: str) -> dict[str, Any] | None:
             data["result"] = json.loads(data.pop("result_json") or "{}")
         except json.JSONDecodeError:
             data["result"] = {}
+        # 前端只展示可疑片段，不展示完整原文（隐私保护）
+        full_text = data.pop("text", "") or ""
+        data["text"] = extract_suspicious_snippets(full_text, data.get("result"))
         return data
 
 

@@ -1178,3 +1178,25 @@ def mask_text(text: str, result: dict[str, Any] | None = None) -> str:
     for start, end, masked in sorted(replacements, reverse=True):
         value = value[:start] + masked + value[end:]
     return value
+
+
+def extract_suspicious_snippets(text: str, result: dict[str, Any] | None = None) -> str:
+    """只提取命中风险信号的原文片段，用于前端展示（不全显原文，保护隐私）。
+
+    从 result 的 signals / inferences 中取出 evidence（命中片段），
+    去重后按权重降序拼接。未命中任何信号时返回空字符串。
+    """
+    info = result or {}
+    snippets: list[tuple[float, str]] = []
+    seen: set[str] = set()
+    for item in (info.get("signals") or []) + (info.get("inferences") or []):
+        if item.get("protective"):
+            continue
+        ev = str(item.get("evidence", "")).strip()
+        if not ev or ev in seen:
+            continue
+        seen.add(ev)
+        weight = float(item.get("weight", 0) or 0)
+        snippets.append((weight, ev))
+    snippets.sort(key=lambda pair: pair[0], reverse=True)
+    return "\n".join(ev for _, ev in snippets)
