@@ -55,7 +55,7 @@ def signals_to_evidence(data: dict[str, Any], provider: str = "ai") -> list[dict
             "weight": max(1, min(30, weight)),
             "severity": "high" if weight >= 12 else "medium",
             "count": 1,
-            "evidence": str(item.get("evidence", ""))[:90],
+            "evidence": str(item.get("evidence", ""))[:600],
             "protective": False,
             "source": provider,
         })

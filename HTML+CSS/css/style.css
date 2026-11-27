@@ -823,11 +823,14 @@ svg {
 }
 
 .risk-media__info small {
-  overflow: hidden;
+  overflow: visible;
   font-size: 12px;
+  line-height: 1.65;
   color: var(--gray-400);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .risk-media__score {
@@ -1977,11 +1980,14 @@ svg {
 
 .evidence__text {
   margin-top: 3px;
-  overflow: hidden;
+  overflow: visible;
   font-size: 12px;
+  line-height: 1.75;
   color: var(--gray-500);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .evidence__meta {
@@ -2035,12 +2041,14 @@ svg {
 }
 
 .pii-item__value {
-  overflow: hidden;
+  overflow: visible;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12px;
   color: var(--gray-700);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .pii-item__count {
@@ -2058,11 +2066,13 @@ svg {
 
 .link-item__url {
   display: block;
-  overflow: hidden;
+  overflow: visible;
   font-size: 12px;
   color: var(--blue-700);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .link-item__reasons {

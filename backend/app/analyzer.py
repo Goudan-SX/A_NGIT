@@ -753,6 +753,13 @@ def analyze_text(text: str, *, engine_name: str = "local-rule-v1") -> dict[str, 
                 for scam_type in sig["scam_types"]:
                     votes[scam_type] = votes.get(scam_type, 0) + weight
             first = unique[0]
+            line_start = clean.rfind("\n", 0, first[0]) + 1
+            line_end = clean.find("\n", first[1])
+            if line_end == -1:
+                line_end = len(clean)
+            snippet = clean[line_start:line_end].strip()
+            if len(snippet) > 800:
+                snippet = snippet[:800] + "…"
             evidence.append({
                 "id": sig["id"],
                 "label": sig["label"],
@@ -760,7 +767,7 @@ def analyze_text(text: str, *, engine_name: str = "local-rule-v1") -> dict[str, 
                 "weight": round(weight, 1),
                 "severity": "low" if protective else sig["severity"],
                 "count": count,
-                "evidence": clean[max(0, first[0] - 8):min(len(clean), first[1] + 12)].replace("\n", " ")[:90],
+                "evidence": snippet,
                 "protective": protective,
             })
 

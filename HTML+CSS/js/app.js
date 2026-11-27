@@ -513,6 +513,7 @@
       var text = document.createElement('p');
       text.className = 'evidence__text';
       text.textContent = item.evidence || '—';
+      text.title = item.evidence || '';
 
       var meta = document.createElement('p');
       meta.className = 'evidence__meta';

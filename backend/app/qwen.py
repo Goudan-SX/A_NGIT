@@ -241,7 +241,7 @@ def qwen_signals_to_evidence(data: dict[str, Any]) -> list[dict[str, Any]]:
             "weight": max(1, min(30, weight)),
             "severity": "high" if weight >= 12 else "medium",
             "count": 1,
-            "evidence": str(item.get("evidence", ""))[:90],
+            "evidence": str(item.get("evidence", ""))[:600],
             "protective": False,
             "source": "qwen",
         })
