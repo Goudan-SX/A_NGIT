@@ -146,6 +146,41 @@ def review_text(text: str, case: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+IMAGE_GROUP_PROMPT = """你是多图联合反诈分析员。用户同时上传了多张图片，系统已分别提取每张图片的 OCR 文本、单图风险点和摘要。
+请横向比对所有图片，判断它们是否属于同一诈骗场景、是否互相印证、是否存在矛盾，并给出整体结论。
+只输出 JSON，不要输出 Markdown，结构如下：
+{
+  "risk_score": 0到100的整数,
+  "scam_type": "诈骗类型",
+  "summary": "不超过120字的整体结论，必须说明多图之间的关联",
+  "signals": [{"label": "风险点", "dimension": "script|financial|info|channel|identity", "weight": 0到30, "evidence": "对应图片/文字依据"}],
+  "suggestions": ["处置建议"],
+  "relationships": ["图片1的转账凭证与图片2的客服话术互相印证", "图片3的二维码与图片1的收款方一致"],
+  "image_findings": [{"index": 1, "role": "该图在骗局中的角色", "risk_points": ["该图的关键风险点"]}]
+}
+重点关注：多张图是否构成完整诈骗链路、金额/账号/二维码/客服身份是否前后一致、是否存在伪造与矛盾。"""
+
+
+def analyze_image_group(text: str, note: str, images: list[dict[str, Any]]) -> dict[str, Any]:
+    payload = {
+        "model": config.DEEPSEEK_MODEL,
+        "temperature": 0.1,
+        "messages": [
+            {"role": "system", "content": IMAGE_GROUP_PROMPT},
+            {
+                "role": "user",
+                "content": "【用户文本】" + (text or "（无）")[:4000]
+                + "\n【用户备注】" + (note or "（无）")[:500]
+                + "\n【图片信息】" + json.dumps(images, ensure_ascii=False)[:16000],
+            },
+        ],
+    }
+    data = ai_common.extract_json(_post(payload))
+    if not data:
+        raise DeepSeekError("DeepSeek 多图联合结果不是有效 JSON")
+    return data
+
+
 def analyze_image(image_bytes: bytes, content_type: str) -> dict[str, Any]:
     data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {

@@ -2144,6 +2144,39 @@ svg {
   border-color: var(--blue-100);
 }
 
+/* 多图关联分析 */
+.cross-image-summary {
+  padding: 9px 11px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--gray-600);
+  background-color: var(--blue-50);
+  border: 1px solid var(--blue-100);
+  border-radius: var(--radius-md);
+}
+
+.cross-image-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cross-image-list li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--gray-600);
+}
+
+.cross-image-list li::before {
+  content: "↔";
+  position: absolute;
+  left: 0;
+  color: var(--blue-600);
+  font-weight: 700;
+}
+
 /* 后续操作区 */
 .action-block {
   display: flex;

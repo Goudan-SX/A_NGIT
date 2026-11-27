@@ -125,7 +125,13 @@
   }
 
   function renderDetail(analysis) {
-    setText('detail-title', analysis.scam_type || '风险研判');
+    var rawType = analysis.scam_type || '';
+    var typeParts = [];
+    rawType.split(' + ').forEach(function (item) {
+      var value = item.trim();
+      if (value && typeParts.indexOf(value) === -1) typeParts.push(value);
+    });
+    setText('detail-title', typeParts.join(' + ') || '风险研判');
     var meta = API.riskMeta(analysis.risk_level);
     var dimensions = (analysis.dimensions || []).map(function (item) {
       var percent = item.max ? Math.round((item.score / item.max) * 100) : 0;
@@ -172,6 +178,19 @@
         '<a class="link-btn" href="' + API.downloadUrl('/api/reports/' + item.id + '/download') + '" target="_blank" rel="noopener">下载</a></li>';
     }).join('');
 
+    var cross = analysis.cross_image;
+    var crossHtml = '';
+    if (cross && cross.count >= 2) {
+      crossHtml = '<section class="detail-section"><h3 class="detail-section__title">多图关联分析（' + cross.count + ' 张）</h3>' +
+        '<p class="detail-text">' + escapeHtml(cross.summary || '') + '</p>' +
+        ((cross.relationships || []).length
+          ? '<ul class="cross-image-list">' + cross.relationships.map(function (item) {
+              return '<li>' + escapeHtml(item) + '</li>';
+            }).join('') + '</ul>'
+          : '') +
+        '</section>';
+    }
+
     var images = (analysis.images || []).map(function (item) {
       var url = item.thumb_name ? API.downloadUrl('/thumbnails/' + item.thumb_name) : API.downloadUrl('/uploads/' + item.stored_name);
       return '<a class="tag tag--neutral" href="' + url + '" target="_blank" rel="noopener" style="text-decoration:none">' +
@@ -199,6 +218,7 @@
       '<section class="detail-section"><h3 class="detail-section__title">风险证据</h3><ul class="evidence-list">' + signals + '</ul></section>' +
       (pii ? '<section class="detail-section"><h3 class="detail-section__title">个人信息暴露</h3><ul class="pii-list">' + pii + '</ul></section>' : '') +
       '<section class="detail-section"><h3 class="detail-section__title">处置建议</h3><ol class="suggestion-list">' + suggestions + '</ol></section>' +
+      crossHtml +
       (modalities ? '<section class="detail-section"><h3 class="detail-section__title">多模态结果</h3><ul class="risk-media">' + modalities + '</ul></section>' : '') +
       (images ? '<section class="detail-section"><h3 class="detail-section__title">文件证据</h3><div>' + images + '</div></section>' : '') +
       (reports ? '<section class="detail-section"><h3 class="detail-section__title">举报材料</h3><ul class="pii-list">' + reports + '</ul></section>' : '') +

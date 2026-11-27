@@ -460,6 +460,234 @@ def _image_meta(data: bytes, file: UploadFile) -> tuple[int | None, int | None, 
         raise HTTPException(status_code=400, detail=f"图片 {file.filename} 无法解析：{exc}") from exc
 
 
+async def _process_image_upload(file: UploadFile, note: str, save: bool) -> dict[str, Any]:
+    original_name = Path(file.filename or "").name
+    ext = Path(original_name).suffix.lower()
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or ""
+    if not (ext in config.IMAGE_EXTENSIONS or content_type.startswith("image/")):
+        return {"error": f"{original_name}：不是支持的图片格式"}
+    try:
+        data = await _read_upload(file, config.MAX_IMAGE_MB * 1024 * 1024)
+        width, height, thumb_name = _image_meta(data, file)
+    except HTTPException as exc:
+        return {"error": str(exc.detail)}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{original_name}：图片处理失败 {str(exc)[:120]}"}
+
+    stored_name, _ = _save_upload(data, original_name, "image")
+    sha256 = hashlib.sha256(data).hexdigest()
+    image_text = ""
+    ai_data: dict[str, Any] = {}
+    ai_provider = ""
+    ai_error = ""
+    ocr_error = ""
+    ocr_source = ""
+    image_cached = content_store.lookup_image(sha256)
+    if image_cached:
+        local = dict(image_cached.get("result") or {})
+        local["engine"] = {
+            "name": "database-image-cache",
+            "ai": False,
+            "provider": "database",
+            "note": "图片库命中 · 复用缓存视觉结果",
+        }
+        local["image_match"] = {
+            "hit": True,
+            "case_id": image_cached["id"],
+            "sha256": sha256,
+            "cached": True,
+        }
+        image_text = str(image_cached.get("ocr_text") or "")
+        ai_provider = "database"
+        ocr_source = "image-cache"
+    else:
+        if deepseek.is_enabled():
+            try:
+                ai_data = await asyncio.to_thread(
+                    deepseek.analyze_image, data, content_type or "image/jpeg"
+                )
+                image_text = str(ai_data.get("ocr_text") or "")
+                ai_provider = "deepseek"
+                ocr_source = "deepseek-vl"
+            except Exception as exc:  # noqa: BLE001
+                ai_error = str(exc)
+        if not ai_data and qwen.is_enabled():
+            try:
+                ai_data = await asyncio.to_thread(qwen.analyze_image, data, content_type or "image/jpeg")
+                image_text = str(ai_data.get("ocr_text") or "")
+                ai_provider = "qwen"
+                ocr_source = "qwen-vl"
+            except Exception as exc:  # noqa: BLE001
+                ai_error = str(exc)
+        if not image_text and ocr.is_available():
+            try:
+                image_text = await asyncio.to_thread(
+                    ocr.extract_text, config.UPLOAD_DIR / stored_name
+                )
+                if image_text:
+                    ocr_source = "windows-ocr"
+            except Exception as exc:  # noqa: BLE001
+                ocr_error = str(exc)
+        local = analyzer.analyze_text("\n".join([note, original_name, image_text]).strip())
+        local = _apply_ai(local, ai_data, source="image", provider=ai_provider) if ai_data else local
+        if ai_provider == "deepseek":
+            local["engine"]["note"] = "DeepSeek V4.1 视觉理解 + 本地规则引擎"
+        elif ai_provider == "qwen":
+            local["engine"]["note"] = "Qwen-VL 图片理解 + 本地规则引擎"
+        elif image_text:
+            local["engine"]["note"] = "Windows OCR 识别截图文字 + 本地规则引擎"
+        elif not (deepseek.is_enabled() or qwen.is_enabled()):
+            local["engine"]["note"] = "未配置视觉模型且 OCR 未识别到文字：图片仅完成格式与元数据校验"
+        elif ai_error:
+            local["engine"]["note"] = f"视觉模型调用失败，已降级为本地规则：{ai_error[:120]}"
+
+    if save:
+        try:
+            content_store.record_image_case(
+                sha256=sha256,
+                original_name=original_name,
+                stored_name=stored_name,
+                content_type=content_type,
+                size_bytes=len(data),
+                width=width,
+                height=height,
+                ocr_text=image_text,
+                result=local,
+            )
+        except Exception:  # noqa: BLE001 - 并发同图可能触发唯一键冲突
+            pass
+
+    part = {
+        "type": "image",
+        "filename": original_name,
+        "result": local,
+        "text": image_text or note,
+        "extra": {
+            "width": width,
+            "height": height,
+            "ocr_text": image_text,
+            "ocr_source": ocr_source,
+            "ai_provider": ai_provider,
+            "image_cached": bool(image_cached),
+            "ai_error": ai_error,
+            "ocr_error": ocr_error,
+            "chars": len(image_text),
+        },
+    }
+    media = {
+        "original_name": original_name,
+        "stored_name": stored_name,
+        "thumb_name": thumb_name,
+        "media_type": "image",
+        "content_type": content_type,
+        "size_bytes": len(data),
+        "width": width,
+        "height": height,
+        "sha256": sha256,
+        "risk_score": local["risk_score"],
+        "ocr_text": image_text,
+        "detail": {
+            "engine": local.get("engine"),
+            "ai_error": ai_error,
+            "ocr_source": ocr_source,
+            "ai_provider": ai_provider,
+        },
+    }
+    staging = None
+    if save:
+        staging = {
+            "modality": "image",
+            "stored_name": stored_name,
+            "original_name": original_name,
+            "content_type": content_type,
+            "size_bytes": len(data),
+            "width": width,
+            "height": height,
+            "sha256": sha256,
+            "ocr_text": image_text,
+            "raw_text": note,
+        }
+    return {"part": part, "media": media, "staging": staging}
+
+
+async def _process_audio_upload(file: UploadFile, note: str, save: bool) -> dict[str, Any]:
+    original_name = Path(file.filename or "").name
+    ext = Path(original_name).suffix.lower()
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or ""
+    if not (ext in config.AUDIO_EXTENSIONS or content_type.startswith("audio/")):
+        return {"error": f"{original_name}：不是支持的音频格式"}
+    try:
+        data = await _read_upload(file, config.MAX_AUDIO_MB * 1024 * 1024)
+    except HTTPException as exc:
+        return {"error": str(exc.detail)}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{original_name}：音频读取失败 {str(exc)[:120]}"}
+
+    stored_name, _ = _save_upload(data, original_name, "audio")
+    sha256 = hashlib.sha256(data).hexdigest()
+    transcript = ""
+    ai_error = ""
+    if qwen.is_enabled():
+        try:
+            transcript = await asyncio.to_thread(qwen.transcribe_audio, data, content_type or "audio/webm")
+        except Exception as exc:  # noqa: BLE001
+            ai_error = str(exc)
+    local = analyzer.analyze_text("\n".join([note, transcript]).strip())
+    if transcript:
+        local["engine"] = {
+            "name": "hybrid-qwen-rule",
+            "ai": True,
+            "provider": "qwen",
+            "source": "audio",
+            "note": "Qwen-ASR 语音转写 + 本地规则引擎",
+        }
+    else:
+        local["engine"]["note"] = (
+            f"Qwen-ASR 调用失败：{ai_error[:120]}" if ai_error
+            else "DeepSeek V4.1 Flash 仅支持文本+图像；语音请配置 QWEN_API_KEY，或手动补充转写文本"
+        )
+    if save and transcript:
+        try:
+            case_matcher.add_case_from_result(transcript, local, source="audio")
+        except Exception:  # noqa: BLE001
+            pass
+
+    part = {
+        "type": "audio",
+        "filename": original_name,
+        "result": local,
+        "text": transcript or note,
+        "extra": {"transcript": transcript, "ai_error": ai_error, "chars": len(transcript)},
+    }
+    media = {
+        "original_name": original_name,
+        "stored_name": stored_name,
+        "thumb_name": None,
+        "media_type": "audio",
+        "content_type": content_type,
+        "size_bytes": len(data),
+        "width": None,
+        "height": None,
+        "sha256": sha256,
+        "risk_score": local["risk_score"],
+        "ocr_text": transcript,
+        "detail": {"engine": local.get("engine"), "ai_error": ai_error},
+    }
+    staging = None
+    if save:
+        staging = {
+            "modality": "audio",
+            "stored_name": stored_name,
+            "original_name": original_name,
+            "content_type": content_type,
+            "size_bytes": len(data),
+            "sha256": sha256,
+            "transcript": transcript,
+            "raw_text": note,
+        }
+    return {"part": part, "media": media, "staging": staging}
+
+
 def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str,
               provider: str = "qwen") -> dict[str, Any]:
     """将 AI 结果叠加到本地规则结果上（保留可解释性，取较高风险）。"""
@@ -537,211 +765,91 @@ async def analyze_multimodal(
     if text.strip():
         staging_rows.append({"modality": "text", "raw_text": text})
 
+    image_upload_files: list[UploadFile] = []
+    audio_upload_files: list[UploadFile] = []
     for file in files or []:
         if not file.filename:
             continue
         original_name = Path(file.filename).name
         ext = Path(original_name).suffix.lower()
         content_type = file.content_type or mimetypes.guess_type(original_name)[0] or ""
-        is_image = ext in config.IMAGE_EXTENSIONS or content_type.startswith("image/")
-        is_audio = ext in config.AUDIO_EXTENSIONS or content_type.startswith("audio/")
-        if not is_image and not is_audio:
-            errors.append(f"{original_name}：不支持的文件类型")
-            continue
-
-        max_bytes = (config.MAX_IMAGE_MB if is_image else config.MAX_AUDIO_MB) * 1024 * 1024
-        try:
-            data = await _read_upload(file, max_bytes)
-        except HTTPException as exc:
-            errors.append(str(exc.detail))
-            continue
-        stored_name, _ = _save_upload(data, original_name, "image" if is_image else "audio")
-        sha256 = hashlib.sha256(data).hexdigest()
-
-        if is_image:
-            try:
-                width, height, thumb_name = _image_meta(data, file)
-            except HTTPException as exc:
-                errors.append(str(exc.detail))
-                continue
-            image_text = ""
-            ai_data: dict[str, Any] = {}
-            ai_provider = ""
-            ai_error = ""
-            ocr_error = ""
-            ocr_source = ""
-            image_cached = content_store.lookup_image(sha256)
-            if image_cached:
-                cached_result = dict(image_cached.get("result") or {})
-                cached_result["engine"] = {
-                    "name": "database-image-cache",
-                    "ai": False,
-                    "provider": "database",
-                    "note": "图片库命中 · 复用缓存视觉结果",
-                }
-                cached_result["image_match"] = {
-                    "hit": True,
-                    "case_id": image_cached["id"],
-                    "sha256": sha256,
-                    "cached": True,
-                }
-                image_text = str(image_cached.get("ocr_text") or "")
-                local = cached_result
-                ai_provider = "database"
-                ocr_source = "image-cache"
-            elif deepseek.is_enabled():
-                try:
-                    ai_data = await asyncio.to_thread(
-                        deepseek.analyze_image, data, content_type or "image/jpeg"
-                    )
-                    image_text = str(ai_data.get("ocr_text") or "")
-                    ai_provider = "deepseek"
-                    ocr_source = "deepseek-vl"
-                except Exception as exc:  # noqa: BLE001
-                    ai_error = str(exc)
-            if not image_cached:
-                if not ai_data and qwen.is_enabled():
-                    try:
-                        ai_data = await asyncio.to_thread(qwen.analyze_image, data, content_type or "image/jpeg")
-                        image_text = str(ai_data.get("ocr_text") or "")
-                        ai_provider = "qwen"
-                        ocr_source = "qwen-vl"
-                    except Exception as exc:  # noqa: BLE001
-                        ai_error = str(exc)
-                if not image_text and ocr.is_available():
-                    try:
-                        image_text = await asyncio.to_thread(
-                            ocr.extract_text, config.UPLOAD_DIR / stored_name
-                        )
-                        if image_text:
-                            ocr_source = "windows-ocr"
-                    except Exception as exc:  # noqa: BLE001
-                        ocr_error = str(exc)
-                local = analyzer.analyze_text("\n".join([note, original_name, image_text]).strip())
-                local = _apply_ai(local, ai_data, source="image", provider=ai_provider) if ai_data else local
-                if ai_provider == "deepseek":
-                    local["engine"]["note"] = "DeepSeek V4.1 视觉理解 + 本地规则引擎"
-                elif ai_provider == "qwen":
-                    local["engine"]["note"] = "Qwen-VL 图片理解 + 本地规则引擎"
-                elif image_text:
-                    local["engine"]["note"] = "Windows OCR 识别截图文字 + 本地规则引擎"
-                elif not (deepseek.is_enabled() or qwen.is_enabled()):
-                    local["engine"]["note"] = "未配置视觉模型且 OCR 未识别到文字：图片仅完成格式与元数据校验"
-                elif ai_error:
-                    local["engine"]["note"] = f"视觉模型调用失败，已降级为本地规则：{ai_error[:120]}"
-            parts.append({
-                "type": "image",
-                "filename": original_name,
-                "result": local,
-                "text": image_text or note,
-                "extra": {
-                    "width": width,
-                    "height": height,
-                    "ocr_text": image_text,
-                    "ocr_source": ocr_source,
-                    "ai_provider": ai_provider,
-                    "image_cached": bool(image_cached),
-                    "ai_error": ai_error,
-                    "ocr_error": ocr_error,
-                    "chars": len(image_text),
-                },
-            })
-            media_rows.append({
-                "original_name": original_name,
-                "stored_name": stored_name,
-                "thumb_name": thumb_name,
-                "media_type": "image",
-                "content_type": content_type,
-                "size_bytes": len(data),
-                "width": width,
-                "height": height,
-                "sha256": sha256,
-                "risk_score": local["risk_score"],
-                "ocr_text": image_text,
-                "detail": {"engine": local.get("engine"), "ai_error": ai_error, "ocr_source": ocr_source, "ai_provider": ai_provider},
-            })
-            if save:
-                content_store.record_image_case(
-                    sha256=sha256,
-                    original_name=original_name,
-                    stored_name=stored_name,
-                    content_type=content_type,
-                    size_bytes=len(data),
-                    width=width,
-                    height=height,
-                    ocr_text=image_text,
-                    result=local,
-                )
-                staging_rows.append({
-                    "modality": "image",
-                    "stored_name": stored_name,
-                    "original_name": original_name,
-                    "content_type": content_type,
-                    "size_bytes": len(data),
-                    "width": width,
-                    "height": height,
-                    "sha256": sha256,
-                    "ocr_text": image_text,
-                    "raw_text": note,
-                })
+        if ext in config.IMAGE_EXTENSIONS or content_type.startswith("image/"):
+            image_upload_files.append(file)
+        elif ext in config.AUDIO_EXTENSIONS or content_type.startswith("audio/"):
+            audio_upload_files.append(file)
         else:
-            transcript = ""
-            ai_error = ""
-            if qwen.is_enabled():
-                try:
-                    transcript = await asyncio.to_thread(qwen.transcribe_audio, data, content_type or "audio/webm")
-                except Exception as exc:  # noqa: BLE001
-                    ai_error = str(exc)
-            local = analyzer.analyze_text("\n".join([note, transcript]).strip())
-            if transcript:
-                local["engine"] = {
-                    "name": "hybrid-qwen-rule",
-                    "ai": True,
-                    "provider": "qwen",
-                    "source": "audio",
-                    "note": "Qwen-ASR 语音转写 + 本地规则引擎",
-                }
-            else:
-                local["engine"]["note"] = (
-                    f"Qwen-ASR 调用失败：{ai_error[:120]}" if ai_error
-                    else "DeepSeek V4.1 Flash 仅支持文本+图像；语音请配置 QWEN_API_KEY，或手动补充转写文本"
-                )
-            parts.append({
-                "type": "audio",
-                "filename": original_name,
-                "result": local,
-                "text": transcript or note,
-                "extra": {"transcript": transcript, "ai_error": ai_error, "chars": len(transcript)},
-            })
-            media_rows.append({
-                "original_name": original_name,
-                "stored_name": stored_name,
-                "thumb_name": None,
-                "media_type": "audio",
-                "content_type": content_type,
-                "size_bytes": len(data),
-                "width": None,
-                "height": None,
-                "sha256": sha256,
-                "risk_score": local["risk_score"],
-                "ocr_text": transcript,
-                "detail": {"engine": local.get("engine"), "ai_error": ai_error},
-            })
-            if save:
-                if transcript:
-                    case_matcher.add_case_from_result(transcript, local, source="audio")
-                staging_rows.append({
-                    "modality": "audio",
-                    "stored_name": stored_name,
-                    "original_name": original_name,
-                    "content_type": content_type,
-                    "size_bytes": len(data),
-                    "sha256": sha256,
-                    "transcript": transcript,
-                    "raw_text": note,
-                })
+            errors.append(f"{original_name}：不支持的文件类型")
+
+    tasks = []
+    tasks.extend(asyncio.create_task(_process_image_upload(file, note, save)) for file in image_upload_files)
+    tasks.extend(asyncio.create_task(_process_audio_upload(file, note, save)) for file in audio_upload_files)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for result in results:
+        if isinstance(result, Exception):
+            errors.append(f"文件处理失败：{str(result)[:160]}")
+            continue
+        if not isinstance(result, dict) or result.get("error"):
+            errors.append(str((result or {}).get("error", "文件处理失败")))
+            continue
+        if result.get("part"):
+            parts.append(result["part"])
+        if result.get("media"):
+            media_rows.append(result["media"])
+        if result.get("staging"):
+            staging_rows.append(result["staging"])
+    image_parts = [item for item in parts if item.get("type") == "image"]
 
     combined = analyzer.merge_modalities(base, parts)
+
+    # 多图联合分析：不是简单取单图最高分，而是让模型横向比对多张图片的信息。
+    if len(image_parts) >= 2:
+        cross_image: dict[str, Any] = {
+            "count": len(image_parts),
+            "enabled": deepseek.is_enabled(),
+            "summary": "",
+            "relationships": [],
+            "image_findings": [],
+        }
+        if deepseek.is_enabled():
+            image_briefs = []
+            for index, part in enumerate(image_parts, start=1):
+                image_briefs.append({
+                    "index": index,
+                    "filename": part.get("filename"),
+                    "risk_score": part.get("result", {}).get("risk_score", 0),
+                    "summary": part.get("result", {}).get("summary", ""),
+                    "ocr_text": str(part.get("extra", {}).get("ocr_text", ""))[:3000],
+                    "signals": [
+                        item.get("label")
+                        for item in part.get("result", {}).get("signals", [])
+                        if not item.get("protective")
+                    ][:8],
+                })
+            try:
+                cross_data = await asyncio.to_thread(
+                    deepseek.analyze_image_group, text, note, image_briefs
+                )
+                combined = _apply_ai(combined, cross_data, source="multi_image", provider="deepseek")
+                combined["engine"] = {
+                    "name": "hybrid-deepseek-multi-image",
+                    "ai": True,
+                    "provider": "deepseek",
+                    "note": "DeepSeek V4.1 多图联合分析 + 本地规则引擎",
+                }
+                cross_image.update({
+                    "summary": str(cross_data.get("summary", "")),
+                    "relationships": cross_data.get("relationships") or [],
+                    "image_findings": cross_data.get("image_findings") or [],
+                    "risk_score": cross_data.get("risk_score"),
+                    "scam_type": cross_data.get("scam_type"),
+                })
+            except Exception as exc:  # noqa: BLE001
+                cross_image["error"] = str(exc)[:200]
+                errors.append(f"多图联合分析失败：{str(exc)[:160]}")
+        else:
+            cross_image["summary"] = "未启用视觉模型，已完成多图并行单图分析"
+        combined["cross_image"] = cross_image
+
     combined["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     combined["modality_errors"] = errors
     source = _source_for(parts, bool(text.strip()))

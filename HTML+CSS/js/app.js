@@ -55,6 +55,17 @@
     return API.riskMeta(level);
   }
 
+  function cleanScamType(value) {
+    var parts = String(value || '').split(' + ').map(function (item) {
+      return item.trim();
+    }).filter(Boolean);
+    var unique = [];
+    parts.forEach(function (item) {
+      if (unique.indexOf(item) === -1) unique.push(item);
+    });
+    return unique.join(' + ');
+  }
+
   function dimensionName(key) {
     var map = {
       script: '话术操控',
@@ -96,6 +107,7 @@
     var engine = (result && result.engine) || {};
     if (engine.name === 'database-cached-review') return '数据库 + AI 缓存';
     if (engine.name === 'database-image-cache') return '图片库缓存';
+    if (engine.name === 'hybrid-deepseek-multi-image') return 'DeepSeek 多图联合';
     if (engine.provider === 'deepseek') return 'DeepSeek V4.1';
     if (engine.ai) return 'Qwen 多模态';
     if (engine.provider === 'database') return '数据库命中';
@@ -242,12 +254,14 @@
     }
     setText($('risk-level-text'), (result.risk_label || level.label) + ' · ' + (result.risk_hint || ''));
 
-    var title = result.scam_type && result.scam_type.indexOf('暂无') === -1
-      ? '疑似「' + result.scam_type + '」诈骗'
+    var scamType = cleanScamType(result.scam_type);
+    var title = scamType && scamType.indexOf('暂无') === -1
+      ? '疑似「' + scamType + '」诈骗'
       : '暂未识别到典型诈骗话术';
     setText($('risk-title'), title);
     setText($('risk-desc'), result.summary || '');
     renderMatch(result.match, result);
+    renderCrossImage(result.cross_image);
 
     renderDimensions(result.dimensions || []);
     renderKeywords(result.matched_keywords || [], result.signals || []);
@@ -283,6 +297,7 @@
     setText($('risk-title'), '粘贴可疑内容后开始检测');
     setText($('risk-desc'), '系统会从话术操控、资金诱导、信息窃取、渠道异常、身份伪装五个维度给出可解释评分。');
     hide($('match-badge'));
+    hide($('cross-image-section'));
     setText($('keyword-count'), '0 项命中');
     setText($('evidence-count'), '0 条');
     setText($('image-count'), '0 项');
@@ -373,6 +388,40 @@
       }
     }
     show(badge);
+  }
+
+  function renderCrossImage(cross) {
+    var section = $('cross-image-section');
+    var summary = $('cross-image-summary');
+    var list = $('cross-image-list');
+    if (!section || !summary || !list) return;
+    if (!cross || !cross.count || cross.count < 2) {
+      hide(section);
+      return;
+    }
+    show(section);
+    setText($('cross-image-count'), cross.count + ' 张');
+    var text = cross.summary || '已完成多图并行分析，正在比对图片之间的关联。';
+    if (cross.error) text += '（多图联合分析暂不可用，已返回单图结果）';
+    setText(summary, text);
+    list.innerHTML = '';
+    var relationships = cross.relationships || [];
+    if (!relationships.length && cross.image_findings) {
+      cross.image_findings.forEach(function (item) {
+        var role = item && item.role ? item.role : '';
+        if (role) relationships.push('图片 ' + (item.index || '') + '：' + role);
+      });
+    }
+    relationships.forEach(function (item) {
+      var li = document.createElement('li');
+      li.textContent = typeof item === 'string' ? item : JSON.stringify(item);
+      list.appendChild(li);
+    });
+    if (!relationships.length) {
+      var li = document.createElement('li');
+      li.textContent = cross.count + ' 张图片已同步分析，未发现明显的跨图矛盾或关联线索。';
+      list.appendChild(li);
+    }
   }
 
   function renderDimensions(items) {
@@ -822,7 +871,9 @@
     });
     if (!accepted.length) return;
     renderMedia();
-    toast('已加入 ' + accepted.length + ' 个文件，开始多模态检测', 'success');
+    toast(accepted.length > 1
+      ? '已加入 ' + accepted.length + ' 个文件，正在同步分析并做多图关联'
+      : '已加入 ' + accepted.length + ' 个文件，开始多模态检测', 'success');
     analyze(false, true);
   }
 
