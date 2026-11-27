@@ -604,14 +604,23 @@ def api_monitor_latest() -> dict[str, Any]:
     return {"ok": True, "item": monitor_state.latest()}
 
 
+@app.post("/api/analyze/preview")
+def analyze_preview(payload: TextAnalyzeRequest) -> dict[str, Any]:
+    """Web 快速预判：只跑本地规则，不写库、不调外部模型。"""
+    result = analyzer.analyze_text(payload.text)
+    result = analyzer.build_hit_contract(result, payload.text)
+    result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    return {"ok": True, "analysis": result}
+
+
 @app.post("/api/analyze/text")
 def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
     started = time.perf_counter()
-    result, match = _analyze_text_with_case(payload.text, skip_ai=payload.fast)
+    result, match = _analyze_text_with_case(payload.text, skip_ai=False)
     result = analyzer.build_hit_contract(result, payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     analysis_id = None
-    if payload.save and not payload.fast and payload.text.strip():
+    if payload.save and payload.text.strip():
         try:
             duration = int((time.perf_counter() - started) * 1000)
             analysis_id = repository.save_analysis(

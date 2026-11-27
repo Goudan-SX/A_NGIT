@@ -96,6 +96,10 @@
     return postForm('/api/analyze', form);
   }
 
+  function previewText(text) {
+    return postJson('/api/analyze/preview', { text: text || '' });
+  }
+
   function analyzeText(text, save, fast) {
     return postJson('/api/analyze/text', {
       text: text || '',
@@ -139,6 +143,7 @@
     remove: remove,
     analyzeMultimodal: analyzeMultimodal,
     analyzeText: analyzeText,
+    previewText: previewText,
     downloadUrl: downloadUrl,
     riskMeta: riskMeta,
     formatTime: formatTime,

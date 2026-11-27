@@ -158,7 +158,7 @@
 
     // 文本先用本地规则/数据库快速出结果，DeepSeek 复核返回后再覆盖，提升感知速度。
     if (!save && !includeFiles && text.trim().length >= 2) {
-      API.analyzeText(text, false, true).then(function (data) {
+      API.previewText(text).then(function (data) {
         if (seq !== state.analyzeSeq || state.fullResultSeq === seq) return;
         state.analysis = data.analysis;
         renderAnalysis(data.analysis);
