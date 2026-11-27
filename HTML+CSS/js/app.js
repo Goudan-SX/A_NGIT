@@ -440,7 +440,8 @@
     state.saved = false;
     setAnalyzing(false);
     renderAnalysis(result);
-    updateScienceByScore(Number(result.risk_score || 0), result.risk_label || '', (result.risk_types || []).join(','));
+    lastRiskScore = Number(result.risk_score || 0);
+    updateScienceByScore(lastRiskScore, result.risk_label || '', (result.risk_types || []).join(','));
     setEngine('本地托盘', '来自桌面托盘的前台窗口监测');
     setGuard('托盘监测中', true);
   }
@@ -1952,8 +1953,18 @@
     }
   }
 
+  var scienceTimer = null;
+  var lastRiskScore = 0;
+
+  function rotateScience() {
+    // 只在未检测或低风险时随机轮换；≥70% 时由检测结果驱动，不随机覆盖
+    if (lastRiskScore < 70) updateScienceByScore(0, '', '');
+  }
+
   function initScienceBlock() {
     updateScienceByScore(0, '', '');
+    if (scienceTimer) clearInterval(scienceTimer);
+    scienceTimer = setInterval(rotateScience, 15000);
   }
 
   /* ------------------------------------------------------------------------

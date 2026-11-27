@@ -3654,3 +3654,39 @@ svg {
 .btn--sm:hover {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
+
+/* ==================== 中等窗口响应式补充 ==================== */
+@media (max-width: 1400px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+    gap: 18px;
+  }
+  .panel { padding: 20px; }
+  .analysis-block { padding: 12px 14px; }
+}
+
+@media (max-width: 1280px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.78fr);
+    gap: 14px;
+  }
+  .panel { padding: 18px; }
+  .region-picker__input { width: 100px; font-size: 12px; }
+  .region-picker__badge { font-size: 12px; padding: 4px 10px; }
+  .site-nav__link { padding: 7px 10px; font-size: 13px; }
+  .brand__slogan { font-size: 11px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .local-brief__desc { font-size: 12px; }
+  .local-brief__channels li { font-size: 11px; }
+}
+
+@media (max-width: 1120px) {
+  .panel--analysis { max-width: 100%; }
+  .science-block { padding: 12px 14px; }
+}
+
+@media (max-width: 980px) {
+  .region-picker { margin-right: 6px; }
+  .region-picker__input { width: 90px; }
+  .local-brief__inner { flex-direction: column; gap: 10px; }
+  .local-brief__channels { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+}
