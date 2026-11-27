@@ -441,7 +441,7 @@
     setAnalyzing(false);
     renderAnalysis(result);
     lastRiskScore = Number(result.risk_score || 0);
-    updateScienceByScore(lastRiskScore, result.risk_label || '', (result.risk_types || []).join(','));
+    updateScienceByScore(lastRiskScore, result.risk_label || '', result.scam_type || '');
     setEngine('本地托盘', '来自桌面托盘的前台窗口监测');
     setGuard('托盘监测中', true);
   }
