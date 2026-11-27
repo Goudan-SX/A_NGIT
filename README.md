@@ -10,7 +10,7 @@
 一键举报材料与反诈科普。
 
 当前版本**不依赖外部 AI 也能完整演示**：文本使用本地规则引擎，图片使用 Windows 自带 OCR
-兜底；配置 Qwen API Key 后，会优先使用 Qwen 文本理解、Qwen-VL 图片理解和 Qwen-ASR 语音转写。
+兜底；配置 DeepSeek API Key 后，优先使用 DeepSeek V4.1 Flash 做文本与图片理解，语音由 Qwen-ASR 转写。
 
 ---
 
@@ -25,7 +25,7 @@
   默认只返回打码后的值，并支持**一键脱敏**。
 - 可疑链接检测：HTTP、IP 地址、短链接、高风险后缀、Punycode、仿冒敏感词。
 - 多模态检测：
-  - 图片：Qwen-VL 优先；未配置 Qwen 时使用 **Windows.Media.Ocr** 本地 OCR，再交给规则引擎；
+  - 图片：DeepSeek V4.1 视觉优先；未配置时依次降级 Qwen-VL、**Windows.Media.Ocr** 本地 OCR；
   - 语音：Qwen-ASR 转写后分析；浏览器还支持直接录音上传；
   - 文本 + 图片 + 语音结果会做维度合并与跨模态加成。
 - 处置闭环：一键生成举报材料（12321 / 110 / 国家反诈中心 / 平台客服）、导出证据 JSON、
@@ -62,7 +62,7 @@
 | 数据库 | SQL Server（默认本机 LocalDB `(localdb)\MSSQLLocalDB`，自动建库建表） |
 | 数据访问 | pyodbc |
 | 图片处理 | Pillow + Windows.Media.Ocr（本地兜底） |
-| 多模态 AI | 阿里云百炼 Qwen：`qwen-plus` / `qwen-vl-max` / `qwen3-asr-flash`（可选） |
+| 多模态 AI | DeepSeek V4.1 Flash：`deepseek-flash`（文本 + 视觉）；Qwen：`qwen3-asr-flash`（语音，可选） |
 
 ---
 
@@ -86,7 +86,9 @@ A_NGIT/
 │   ├── app/
 │   │   ├── main.py                # FastAPI 路由、上传、报告、静态页面
 │   │   ├── analyzer.py            # 五维评分、话术库、PII、链接、跨模态合并
-│   │   ├── qwen.py                # Qwen 文本/视觉/语音适配
+│   │   ├── deepseek.py            # DeepSeek 文本/视觉适配
+│   │   ├── ai_common.py           # AI JSON 解析与证据转换
+│   │   ├── qwen.py                # Qwen 语音/备用视觉适配
 │   │   ├── ocr.py                 # Windows OCR 本地兜底
 │   │   ├── ocr_windows.ps1        # WinRT OCR 调用脚本
 │   │   ├── db.py                  # SQL Server 连接与建库
@@ -156,9 +158,28 @@ python backend/seed_demo.py --force
 
 ---
 
-## 五、Qwen 多模态配置
+## 五、AI 模型配置
 
-在 <https://bailian.console.aliyun.com/> 开通百炼并创建 API Key，写入 `.env`：
+### 1. DeepSeek V4.1 Flash（默认优先）
+
+官方模型名 `deepseek-flash`，原生支持**文本 + 图像**理解，接口为 OpenAI 兼容的
+`https://api.deepseek.com/chat/completions`。
+
+在 <https://platform.deepseek.com/> 创建 API Key 后写入 `.env`：
+
+```ini
+DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
+DEEPSEEK_VISION_MODEL=deepseek-flash
+DEEPSEEK_TIMEOUT=90
+```
+
+> 官方 API Key 需要 `sk-` 前缀；如果只拿到 32 位密钥，项目会自动补全前缀。
+
+### 2. Qwen（语音 ASR 与备用视觉）
+
+在 <https://bailian.console.aliyun.com/> 开通百炼并创建 API Key：
 
 ```ini
 QWEN_API_KEY=sk-xxxxxxxxxxxxxxxx
@@ -167,20 +188,20 @@ QWEN_VL_MODEL=qwen-vl-max
 QWEN_AUDIO_MODEL=qwen3-asr-flash
 ```
 
-启用后的行为：
+### 3. 启用后的行为
 
 | 模态 | 优先方案 | 兜底方案 |
 | --- | --- | --- |
-| 文本 | Qwen 文本语义分析 + 本地规则融合 | 本地规则引擎 |
-| 图片 | Qwen-VL 识别截图文字与风险 | Windows OCR + 本地规则 |
-| 语音 | Qwen-ASR 转写 | 仅完成文件校验，提示配置 Key |
+| 文本 | DeepSeek V4.1 Flash + 本地规则融合 | Qwen 文本 → 本地规则 |
+| 图片 | DeepSeek V4.1 视觉理解 | Qwen-VL → Windows OCR → 本地规则 |
+| 语音 | Qwen-ASR 转写 | 手动补充转写文本 |
 
 说明：
 
-- 语音模型名以账号实际开通为准，可通过 `QWEN_AUDIO_MODEL` 覆盖。
-- Qwen 接口采用 OpenAI 兼容的 `chat/completions`；图片以 data URL 传入。
-- Qwen 结果只作为语义增强与补充证据，最终评分仍保存完整维度与规则证据，方便答辩解释。
-- 未配置 Key 时，页面右上角显示“规则引擎 v1”；图片 OCR 成功时显示“OCR + 规则”。
+- DeepSeek V4.1 Flash 当前只支持文本 + 图像，不支持音频；语音仍走 Qwen-ASR。
+- 两个模型的 Key 都未配置时，页面显示“规则引擎 v1”；图片 OCR 成功时显示“OCR + 规则”。
+- 配置 DeepSeek 后，页面右上角显示“DeepSeek V4.1”。
+- AI 结果只作为语义增强与补充证据，最终评分仍保存完整维度与规则证据，方便答辩解释。
 
 ---
 
@@ -219,7 +240,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | 服务与数据库健康检查 |
-| GET | `/api/config` | 前端读取 Qwen 启用状态与上传限制 |
+| GET | `/api/config` | 前端读取 AI Provider 启用状态与上传限制 |
 | POST | `/api/analyze/text` | 文本检测，`save=false` 仅预览不落库 |
 | POST | `/api/analyze` | 多模态检测（multipart：`text` / `note` / `save` / `files`） |
 | GET | `/api/history` | 历史记录分页、关键词/等级/来源筛选 |
@@ -259,7 +280,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 1. 打开首页，默认示例文本会立即得到 86% 左右的高风险结论；
 2. 指出五个评分维度、命中的证据原文、风险等级；
-3. 上传一张包含“验证码 / 屏幕共享 / 转账”的聊天截图，展示 OCR / Qwen-VL 与跨模态融合；
+3. 上传一张包含“验证码 / 屏幕共享 / 转账”的聊天截图，展示 DeepSeek V4.1 视觉理解与跨模态融合；
 4. 粘贴包含手机号、身份证、银行卡、验证码的文本，展示 PII 打码与“一键脱敏”；
 5. 点击“一键举报”，生成举报编号与结构化材料，展示闭环；
 6. 打开“历史记录”查看 SQL Server 落库结果，打开“运行日志”展示审计链路；
@@ -273,7 +294,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 - 举报材料不会自动提交给官方平台，只生成可复制的结构化文本，避免误报与越权。
 - 规则引擎是**辅助判断**，不能替代警方或法律意见；高风险结论应提示用户拨打 96110 / 110。
 - Windows OCR 依赖本机已安装的中文 OCR 语言包；非 Windows 环境自动跳过，只做文件与元数据校验。
-- Qwen 调用失败会自动降级到本地规则，不影响检测主流程。
+- DeepSeek / Qwen 调用失败会自动降级到本地规则或 OCR，不影响检测主流程。
 - 上传文件保存在 `backend/data/`，不提交到 Git；生产部署应接入对象存储、鉴权与访问审计。
 
 ---

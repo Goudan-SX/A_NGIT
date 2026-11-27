@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from . import analyzer, config, db, ocr, qwen, repository
+from . import ai_common, analyzer, config, db, deepseek, ocr, qwen, repository
 
 STARTED_AT = time.time()
 
@@ -146,6 +146,34 @@ def build_report_text(analysis: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------
 # 健康检查与配置
 # --------------------------------------------------------------------------
+def _ai_status() -> dict[str, Any]:
+    deepseek_status = deepseek.status()
+    qwen_status = qwen.status()
+    if deepseek_status["enabled"]:
+        return {
+            "enabled": True,
+            "provider": "deepseek",
+            "note": "DeepSeek V4.1 Flash（文本 + 视觉）已启用",
+            "deepseek": deepseek_status,
+            "qwen": qwen_status,
+        }
+    if qwen_status["enabled"]:
+        return {
+            "enabled": True,
+            "provider": "qwen",
+            "note": "Qwen 多模态已启用",
+            "deepseek": deepseek_status,
+            "qwen": qwen_status,
+        }
+    return {
+        "enabled": False,
+        "provider": "local",
+        "note": "未配置 AI Key，当前使用本地规则 + Windows OCR",
+        "deepseek": deepseek_status,
+        "qwen": qwen_status,
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     try:
@@ -158,7 +186,7 @@ def health() -> dict[str, Any]:
         "version": config.APP_VERSION,
         "uptime_seconds": int(time.time() - STARTED_AT),
         "database": database,
-        "ai": qwen.status(),
+        "ai": _ai_status(),
     }
 
 
@@ -167,7 +195,7 @@ def api_config() -> dict[str, Any]:
     return {
         "app": config.APP_NAME,
         "version": config.APP_VERSION,
-        "ai": qwen.status(),
+        "ai": _ai_status(),
         "limits": {
             "max_image_mb": config.MAX_IMAGE_MB,
             "max_audio_mb": config.MAX_AUDIO_MB,
@@ -216,17 +244,28 @@ def api_logs(
 # --------------------------------------------------------------------------
 # 文本分析
 # --------------------------------------------------------------------------
-def _enhance_text_with_qwen(result: dict[str, Any], text: str, errors: list[str] | None = None) -> dict[str, Any]:
-    if not qwen.is_enabled() or not text.strip():
+def _enhance_text_with_ai(result: dict[str, Any], text: str, errors: list[str] | None = None) -> dict[str, Any]:
+    if not text.strip():
         return result
-    try:
-        ai_data = qwen.analyze_text(text)
-        result = _apply_ai(result, ai_data, source="text")
-        result["engine"]["note"] = "Qwen 文本理解 + 本地规则引擎"
-    except Exception as exc:  # noqa: BLE001
-        result["engine"]["note"] = f"Qwen 文本调用失败，已降级为本地规则：{str(exc)[:120]}"
-        if errors is not None:
-            errors.append(f"Qwen 文本分析失败：{str(exc)[:160]}")
+    if deepseek.is_enabled():
+        try:
+            ai_data = deepseek.analyze_text(text)
+            result = _apply_ai(result, ai_data, source="text", provider="deepseek")
+            result["engine"]["note"] = "DeepSeek V4.1 文本理解 + 本地规则引擎"
+            return result
+        except Exception as exc:  # noqa: BLE001
+            if errors is not None:
+                errors.append(f"DeepSeek 文本分析失败：{str(exc)[:160]}")
+            result["engine"]["note"] = f"DeepSeek 调用失败，已尝试降级：{str(exc)[:120]}"
+    if qwen.is_enabled():
+        try:
+            ai_data = qwen.analyze_text(text)
+            result = _apply_ai(result, ai_data, source="text", provider="qwen")
+            result["engine"]["note"] = "Qwen 文本理解 + 本地规则引擎"
+        except Exception as exc:  # noqa: BLE001
+            result["engine"]["note"] = f"Qwen 文本调用失败，已降级为本地规则：{str(exc)[:120]}"
+            if errors is not None:
+                errors.append(f"Qwen 文本分析失败：{str(exc)[:160]}")
     return result
 
 
@@ -234,7 +273,7 @@ def _enhance_text_with_qwen(result: dict[str, Any], text: str, errors: list[str]
 def analyze_text_endpoint(payload: TextAnalyzeRequest) -> dict[str, Any]:
     started = time.perf_counter()
     result = analyzer.analyze_text(payload.text)
-    result = _enhance_text_with_qwen(result, payload.text)
+    result = _enhance_text_with_ai(result, payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     analysis_id = None
     if payload.save and payload.text.strip():
@@ -303,8 +342,9 @@ def _image_meta(data: bytes, file: UploadFile) -> tuple[int | None, int | None, 
         raise HTTPException(status_code=400, detail=f"图片 {file.filename} 无法解析：{exc}") from exc
 
 
-def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str) -> dict[str, Any]:
-    """将 Qwen 结果叠加到本地规则结果上（保留可解释性，取较高风险）。"""
+def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str,
+              provider: str = "qwen") -> dict[str, Any]:
+    """将 AI 结果叠加到本地规则结果上（保留可解释性，取较高风险）。"""
     if not ai_data:
         return result
     ai_score = 0
@@ -312,7 +352,7 @@ def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str) -
         ai_score = max(0, min(100, int(ai_data.get("risk_score", 0))))
     except (TypeError, ValueError):
         ai_score = 0
-    evidence = qwen.qwen_signals_to_evidence(ai_data)
+    evidence = ai_common.signals_to_evidence(ai_data, provider)
     known = {item.get("label") for item in result.get("signals", [])}
     for item in evidence:
         if item["label"] not in known:
@@ -347,8 +387,15 @@ def _apply_ai(result: dict[str, Any], ai_data: dict[str, Any], *, source: str) -
         if text and text not in result["suggestions"]:
             result["suggestions"].append(text)
     result["suggestions"] = result["suggestions"][:8]
-    result["engine"] = {"name": "hybrid-qwen-rule", "ai": True, "source": source}
-    result["ai"] = {"provider": "qwen", "score": ai_score, "enabled": True}
+    provider_label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
+    result["engine"] = {
+        "name": f"hybrid-{provider}-rule",
+        "ai": True,
+        "provider": provider,
+        "source": source,
+        "note": f"{provider_label} + 本地规则引擎",
+    }
+    result["ai"] = {"provider": provider, "score": ai_score, "enabled": True}
     return result
 
 
@@ -364,7 +411,7 @@ async def analyze_multimodal(
     note = (note or "")[:500]
     errors: list[str] = []
     base = analyzer.analyze_text(text)
-    base = _enhance_text_with_qwen(base, text, errors)
+    base = _enhance_text_with_ai(base, text, errors)
     parts: list[dict[str, Any]] = []
     media_rows: list[dict[str, Any]] = []
 
@@ -397,13 +444,25 @@ async def analyze_multimodal(
                 continue
             image_text = ""
             ai_data: dict[str, Any] = {}
+            ai_provider = ""
             ai_error = ""
             ocr_error = ""
             ocr_source = ""
-            if qwen.is_enabled():
+            if deepseek.is_enabled():
+                try:
+                    ai_data = await asyncio.to_thread(
+                        deepseek.analyze_image, data, content_type or "image/jpeg"
+                    )
+                    image_text = str(ai_data.get("ocr_text") or "")
+                    ai_provider = "deepseek"
+                    ocr_source = "deepseek-vl"
+                except Exception as exc:  # noqa: BLE001
+                    ai_error = str(exc)
+            if not ai_data and qwen.is_enabled():
                 try:
                     ai_data = await asyncio.to_thread(qwen.analyze_image, data, content_type or "image/jpeg")
                     image_text = str(ai_data.get("ocr_text") or "")
+                    ai_provider = "qwen"
                     ocr_source = "qwen-vl"
                 except Exception as exc:  # noqa: BLE001
                     ai_error = str(exc)
@@ -417,15 +476,17 @@ async def analyze_multimodal(
                 except Exception as exc:  # noqa: BLE001
                     ocr_error = str(exc)
             local = analyzer.analyze_text("\n".join([note, original_name, image_text]).strip())
-            local = _apply_ai(local, ai_data, source="image") if ai_data else local
-            if ai_data:
+            local = _apply_ai(local, ai_data, source="image", provider=ai_provider) if ai_data else local
+            if ai_provider == "deepseek":
+                local["engine"]["note"] = "DeepSeek V4.1 视觉理解 + 本地规则引擎"
+            elif ai_provider == "qwen":
                 local["engine"]["note"] = "Qwen-VL 图片理解 + 本地规则引擎"
             elif image_text:
                 local["engine"]["note"] = "Windows OCR 识别截图文字 + 本地规则引擎"
-            elif not qwen.is_enabled():
-                local["engine"]["note"] = "未配置 Qwen-VL 且 OCR 未识别到文字：图片仅完成格式与元数据校验"
+            elif not (deepseek.is_enabled() or qwen.is_enabled()):
+                local["engine"]["note"] = "未配置视觉模型且 OCR 未识别到文字：图片仅完成格式与元数据校验"
             elif ai_error:
-                local["engine"]["note"] = f"Qwen-VL 调用失败，已降级为本地规则：{ai_error[:120]}"
+                local["engine"]["note"] = f"视觉模型调用失败，已降级为本地规则：{ai_error[:120]}"
             parts.append({
                 "type": "image",
                 "filename": original_name,
@@ -436,6 +497,7 @@ async def analyze_multimodal(
                     "height": height,
                     "ocr_text": image_text,
                     "ocr_source": ocr_source,
+                    "ai_provider": ai_provider,
                     "ai_error": ai_error,
                     "ocr_error": ocr_error,
                     "chars": len(image_text),
@@ -453,7 +515,7 @@ async def analyze_multimodal(
                 "sha256": sha256,
                 "risk_score": local["risk_score"],
                 "ocr_text": image_text,
-                "detail": {"engine": local.get("engine"), "ai_error": ai_error, "ocr_source": ocr_source},
+                "detail": {"engine": local.get("engine"), "ai_error": ai_error, "ocr_source": ocr_source, "ai_provider": ai_provider},
             })
         else:
             transcript = ""
@@ -465,11 +527,17 @@ async def analyze_multimodal(
                     ai_error = str(exc)
             local = analyzer.analyze_text("\n".join([note, transcript]).strip())
             if transcript:
-                local["engine"] = {"name": "hybrid-qwen-rule", "ai": True, "source": "audio"}
+                local["engine"] = {
+                    "name": "hybrid-qwen-rule",
+                    "ai": True,
+                    "provider": "qwen",
+                    "source": "audio",
+                    "note": "Qwen-ASR 语音转写 + 本地规则引擎",
+                }
             else:
                 local["engine"]["note"] = (
                     f"Qwen-ASR 调用失败：{ai_error[:120]}" if ai_error
-                    else "未配置 Qwen-ASR：请补充语音转写文本，或配置 QWEN_API_KEY"
+                    else "DeepSeek V4.1 Flash 仅支持文本+图像；语音请配置 QWEN_API_KEY，或手动补充转写文本"
                 )
             parts.append({
                 "type": "audio",

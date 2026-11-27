@@ -16,6 +16,7 @@
     analyzing: false,
     analyzeSeq: 0,
     autoTimer: null,
+    pendingAuto: false,
     recorder: null,
     recordChunks: [],
     report: null
@@ -92,6 +93,7 @@
 
   function engineLabel(result) {
     var engine = (result && result.engine) || {};
+    if (engine.provider === 'deepseek') return 'DeepSeek V4.1';
     if (engine.ai) return 'Qwen 多模态';
     if (String(engine.note || '').indexOf('OCR') !== -1) return 'OCR + 规则';
     return '规则引擎 v1';
@@ -123,6 +125,10 @@
    * 一、检测与结果渲染
    * ---------------------------------------------------------------------- */
   function analyze(save, includeFiles) {
+    if (state.analyzing && !save) {
+      state.pendingAuto = true;
+      return Promise.resolve(null);
+    }
     var input = $('chat-text');
     var text = input ? input.value : '';
     var files = includeFiles ? state.files : [];
@@ -181,6 +187,11 @@
     }).finally(function () {
       if (seq === state.analyzeSeq) {
         setAnalyzing(false);
+        var auto = $('auto-analyze');
+        if (state.pendingAuto && auto && auto.checked) {
+          state.pendingAuto = false;
+          scheduleAutoAnalyze();
+        }
       }
     });
   }
@@ -561,7 +572,7 @@
       } else if (!state.files.length) {
         renderEmpty();
       }
-    }, 650);
+    }, 1200);
   }
 
   function bindTextEvents() {
@@ -1381,7 +1392,9 @@
 
   function loadConfig() {
     API.get('/api/config').then(function (data) {
-      if (data.ai && data.ai.enabled) {
+      if (data.ai && data.ai.provider === 'deepseek') {
+        setEngine('DeepSeek V4.1', data.ai.note);
+      } else if (data.ai && data.ai.enabled) {
         setEngine('Qwen 多模态', data.ai.note);
       } else {
         setEngine('规则引擎 v1', data.ai ? data.ai.note : '本地规则引擎');

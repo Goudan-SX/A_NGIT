@@ -51,8 +51,22 @@ DB_ENCRYPT = os.getenv("DB_ENCRYPT", "no")
 DB_TIMEOUT = int(os.getenv("DB_TIMEOUT", "10"))
 
 # --------------------------------------------------------------------------
-# Qwen / 通义千问（优先使用的多模态能力）
-# 未配置 Key 时系统自动降级为本地规则引擎，不影响基础功能演示。
+# DeepSeek V4.1 Flash（默认优先的文本 + 视觉模型）
+# 官方模型名 deepseek-flash，原生支持 text + image 输入。
+# --------------------------------------------------------------------------
+_deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+if _deepseek_key and not _deepseek_key.startswith("sk-") and len(_deepseek_key) == 32:
+    _deepseek_key = "sk-" + _deepseek_key
+DEEPSEEK_API_KEY = _deepseek_key
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+DEEPSEEK_VISION_MODEL = os.getenv("DEEPSEEK_VISION_MODEL", "deepseek-flash")
+DEEPSEEK_TIMEOUT = int(os.getenv("DEEPSEEK_TIMEOUT", "90"))
+DEEPSEEK_ENABLED = bool(DEEPSEEK_API_KEY)
+
+# --------------------------------------------------------------------------
+# Qwen / 通义千问（语音 ASR 与备用多模态能力）
+# 未配置 Key 时自动跳过，不影响本地规则与 DeepSeek。
 # --------------------------------------------------------------------------
 QWEN_API_KEY = os.getenv("QWEN_API_KEY", "").strip()
 QWEN_BASE_URL = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")

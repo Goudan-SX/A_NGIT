@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="反诈卫士：面向青年与市民的 AI 诈骗识别助手，支持文本、图片、语音多模态风险研判、每日案例、反诈问答与知识宣传。" />
   <title>反诈卫士 · AI 诈骗识别与个人信息保护助手</title>
-  <link rel="stylesheet" href="../css/style.css?v=1.0.0" />
+  <link rel="stylesheet" href="../css/style.css?v=1.1.1" />
 </head>
 
 <body>
@@ -136,7 +136,7 @@
               </span>
               <span class="uploader__text">
                 <strong>拖拽、粘贴聊天截图或录音</strong>
-                <small>图片 ≤ 10 MB · 语音 ≤ 25 MB · Qwen 多模态优先</small>
+                <small>图片 ≤ 10 MB · 语音 ≤ 25 MB · DeepSeek V4.1 优先</small>
               </span>
               <span class="uploader__action" aria-hidden="true">选择文件</span>
             </div>
@@ -151,7 +151,7 @@
 
             <div class="media-grid" id="media-grid"></div>
             <p class="field-note" id="media-note">
-              图片优先使用 Qwen-VL，未配置时使用 Windows OCR + 本地规则；语音优先使用 Qwen-ASR 转写。
+              图片优先使用 DeepSeek V4.1 视觉，Qwen-VL / Windows OCR 兜底；语音优先使用 Qwen-ASR 转写。
             </p>
           </div>
         </section>
@@ -429,7 +429,7 @@
   <!-- ==================== 页脚 ==================== -->
   <footer class="site-footer">
     <p>赛题 11 · 反诈卫士 · 网络安全方向</p>
-    <p>Python + FastAPI + SQL Server · 本地规则引擎 + Qwen 多模态适配</p>
+    <p>Python + FastAPI + SQL Server · DeepSeek V4.1 + Qwen-ASR</p>
     <p class="site-footer__links">
       <a href="history.html">历史记录</a>
       <span aria-hidden="true">·</span>
@@ -497,7 +497,7 @@
 
   <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="../js/api.js?v=1.0.0"></script>
-  <script src="../js/app.js?v=1.0.0"></script>
+  <script src="../js/api.js?v=1.1.1"></script>
+  <script src="../js/app.js?v=1.1.1"></script>
 </body>
 </html>

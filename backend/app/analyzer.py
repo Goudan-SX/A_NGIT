@@ -921,11 +921,16 @@ def merge_modalities(base: dict[str, Any], parts: list[dict[str, Any]]) -> dict[
         ) + " 检测结果。"
 
     part_engines = [part["result"].get("engine", {}) for part in parts]
-    if any(engine.get("ai") for engine in part_engines):
+    ai_engines = [engine for engine in part_engines if engine.get("ai")]
+    if ai_engines:
+        providers = {engine.get("provider") for engine in ai_engines if engine.get("provider")}
+        provider = "deepseek" if "deepseek" in providers else "qwen"
+        provider_label = "DeepSeek V4.1" if provider == "deepseek" else "Qwen"
         base["engine"] = {
-            "name": "hybrid-qwen-rule",
+            "name": f"hybrid-{provider}-rule",
             "ai": True,
-            "note": "Qwen 多模态 + 本地规则引擎",
+            "provider": provider,
+            "note": f"{provider_label} 多模态 + 本地规则引擎",
         }
     elif any("ocr" in str(engine.get("note", "")).lower() for engine in part_engines):
         base["engine"] = {
