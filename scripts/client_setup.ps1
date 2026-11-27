@@ -40,7 +40,7 @@ $form.Controls.Add($label2)
 $serverBox = New-Object System.Windows.Forms.TextBox
 $serverBox.Location = New-Object System.Drawing.Point(120, 75)
 $serverBox.Size = New-Object System.Drawing.Size(480, 26)
-$serverBox.Text = 'https://'
+$serverBox.Text = 'https://goudan.tailf0dbf6.ts.net'
 $form.Controls.Add($serverBox)
 
 $note = New-Object System.Windows.Forms.Label
