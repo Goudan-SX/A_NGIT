@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="反诈卫士：面向青年的 AI 诈骗识别与个人信息保护助手，实时分析聊天文本与图片中的诈骗风险。"
+  />
+  <title>反诈卫士 · AI 诈骗识别与个人信息保护助手</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+  <!-- 页面主标题：视觉上隐藏，保证文档大纲完整 -->
+  <h1 class="visually-hidden">反诈卫士 · 诈骗风险实时监测工作台</h1>
+
+  <!-- ==================== 顶部导航栏 ==================== -->
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="index.html" aria-label="反诈卫士首页">
+        <span class="brand__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 4.5 6v6c0 4.2 3.1 7.6 7.5 9 4.4-1.4 7.5-4.8 7.5-9V6L12 3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </span>
+        <span class="brand__text">
+          <span class="brand__name">反诈卫士</span>
+          <span class="brand__slogan">AI 诈骗识别与个人信息保护助手</span>
+        </span>
+      </a>
+
+      <nav class="site-nav" aria-label="主导航">
+        <a class="site-nav__link site-nav__link--active" href="index.html" aria-current="page">个人用户</a>
+        <a class="site-nav__link" href="#">历史记录</a>
+        <a class="site-nav__link" href="#">日志</a>
+      </nav>
+
+      <p class="guard-status">
+        <span class="guard-status__dot" aria-hidden="true"></span>
+        实时防护中
+      </p>
+    </div>
+  </header>
+
+  <!-- ==================== 工作区：左侧输入 / 右侧分析 ==================== -->
+  <main class="workspace">
+    <!-- 左侧：聊天文本与图片输入区 -->
+    <section class="panel panel--input" aria-labelledby="chat-title">
+      <header class="panel__header">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">对话监测</p>
+          <h2 class="panel__title" id="chat-title">聊天文本</h2>
+        </div>
+        <p class="chip chip--live">
+          <span class="chip__dot" aria-hidden="true"></span>
+          实时接收中
+        </p>
+      </header>
+
+      <div class="chat-field">
+        <div class="chat-field__meta">
+          <label class="chat-field__label" for="chat-text">聊天文本输入 / 接收区</label>
+          <span class="chat-field__hint">逐句分析 · 本地处理</span>
+        </div>
+
+        <textarea
+          class="chat-field__input"
+          id="chat-text"
+          spellcheck="false"
+          aria-describedby="chat-tips"
+        >[11:42] 陌生好友：亲，动动手指日赚 300，刷单返利，先垫付后返还。
+[11:43] 陌生好友：你的账户被冻结了，把验证码发给我就能解冻。
+[11:44] 陌生好友：下载会议 App 并开启屏幕共享，我远程指导你操作。</textarea>
+
+        <div class="chat-field__footer" id="chat-tips">
+          <span>3 条消息 · 约 120 字</span>
+          <span>内容仅用于本次风险分析</span>
+        </div>
+      </div>
+
+      <div class="media-field">
+        <div class="media-field__head">
+          <h3 class="media-field__title">图片区域</h3>
+          <p class="media-field__hint">聊天截图 · 二维码 · 转账凭证</p>
+        </div>
+
+        <!-- 图片上传占位区 -->
+        <div class="uploader">
+          <span class="uploader__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="3" />
+              <circle cx="9" cy="10" r="1.6" />
+              <path d="m5 18 5.5-5.5a2 2 0 0 1 2.8 0L19 18" />
+              <path d="M15 4v5h5" />
+            </svg>
+          </span>
+          <span class="uploader__text">
+            <strong>拖拽或粘贴聊天图片</strong>
+            <small>支持 PNG / JPG / 屏幕截图，单张不超过 10 MB</small>
+          </span>
+          <span class="uploader__action" aria-hidden="true">选择图片</span>
+        </div>
+
+        <!-- 已接收图片列表（静态示例） -->
+        <div class="media-grid">
+          <figure class="media-card">
+            <div class="media-card__preview media-card__preview--transfer" role="img" aria-label="转账截图示例">
+              <span class="mock-pill">转账 · 已受理</span>
+              <strong class="mock-amount">¥5,000</strong>
+            </div>
+            <figcaption class="media-card__caption">
+              <span class="media-card__name">转账截图</span>
+              <span class="tag tag--danger">高风险</span>
+            </figcaption>
+          </figure>
+
+          <figure class="media-card">
+            <div class="media-card__preview media-card__preview--qr" role="img" aria-label="收款二维码示例">
+              <span class="mock-qr" aria-hidden="true"></span>
+              <span class="mock-qr__label">扫码领福利</span>
+            </div>
+            <figcaption class="media-card__caption">
+              <span class="media-card__name">收款二维码</span>
+              <span class="tag tag--danger">高风险</span>
+            </figcaption>
+          </figure>
+
+          <figure class="media-card">
+            <div class="media-card__preview media-card__preview--profile" role="img" aria-label="客服名片示例">
+              <span class="mock-avatar" aria-hidden="true">服</span>
+              <span class="mock-lines" aria-hidden="true">
+                <i></i><i></i><i></i>
+              </span>
+            </div>
+            <figcaption class="media-card__caption">
+              <span class="media-card__name">客服名片</span>
+              <span class="tag tag--neutral">待分析</span>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧：实时风险分析区 -->
+    <aside class="panel panel--analysis" aria-labelledby="analysis-title">
+      <header class="panel__header">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">AI 研判</p>
+          <h2 class="panel__title" id="analysis-title">风险分析</h2>
+        </div>
+        <p class="chip chip--ai">
+          <span class="chip__dot" aria-hidden="true"></span>
+          实时分析
+        </p>
+      </header>
+
+      <!-- 风险总分 -->
+      <div class="risk-overview">
+        <div class="risk-ring" role="img" aria-label="综合诈骗风险 87%，属于高风险">
+          <div class="risk-ring__inner">
+            <strong class="risk-ring__value">87<span>%</span></strong>
+            <span class="risk-ring__label">诈骗风险</span>
+          </div>
+        </div>
+
+        <div class="risk-summary">
+          <p class="risk-summary__level">
+            <span class="risk-summary__dot" aria-hidden="true"></span>
+            高风险 · 建议立即停止沟通
+          </p>
+          <h3 class="risk-summary__title">疑似「刷单返利 + 屏幕共享」复合型诈骗</h3>
+          <p class="risk-summary__desc">
+            文本命中刷单、垫付、验证码等典型话术；图片中发现伪造转账凭证。
+            请勿继续转账，也不要开启屏幕共享或提供短信验证码。
+          </p>
+        </div>
+      </div>
+
+      <!-- 高危词汇 -->
+      <section class="analysis-block" aria-labelledby="keywords-title">
+        <div class="analysis-block__head">
+          <h3 class="analysis-block__title" id="keywords-title">高危词汇</h3>
+          <span class="analysis-block__count">6 项命中</span>
+        </div>
+        <ul class="tag-list">
+          <li class="tag tag--danger">刷单返利</li>
+          <li class="tag tag--danger">垫付资金</li>
+          <li class="tag tag--danger">验证码</li>
+          <li class="tag tag--danger">屏幕共享</li>
+          <li class="tag tag--danger">账户冻结</li>
+          <li class="tag tag--warn">日赚佣金</li>
+        </ul>
+      </section>
+
+      <!-- 高风险图片 -->
+      <section class="analysis-block" aria-labelledby="images-title">
+        <div class="analysis-block__head">
+          <h3 class="analysis-block__title" id="images-title">高风险图片</h3>
+          <span class="analysis-block__count">2 张</span>
+        </div>
+
+        <ul class="risk-media">
+          <li class="risk-media__item">
+            <span class="risk-media__preview risk-media__preview--transfer" role="img"
+              aria-label="伪造转账截图缩略图">¥</span>
+            <span class="risk-media__info">
+              <strong>伪造转账截图</strong>
+              <small>OCR 识别金额与真实流水不符</small>
+            </span>
+            <span class="risk-media__score">96%</span>
+          </li>
+
+          <li class="risk-media__item">
+            <span class="risk-media__preview risk-media__preview--qr" role="img"
+              aria-label="收款二维码缩略图"></span>
+            <span class="risk-media__info">
+              <strong>收款二维码</strong>
+              <small>指向未备案的第三方收款页面</small>
+            </span>
+            <span class="risk-media__score">88%</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- 后续操作区：为举报、科普、证据导出等功能预留 -->
+      <section class="reserved" aria-labelledby="reserved-title">
+        <div class="reserved__head">
+          <h3 class="reserved__title" id="reserved-title">后续操作区</h3>
+          <span class="reserved__badge">预留</span>
+        </div>
+        <div class="reserved__canvas">
+          <span class="reserved__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+          <p class="reserved__hint">举报 · 科普 · 证据导出</p>
+          <p class="reserved__sub">该区域为后续功能预留，可继续扩展操作入口</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ==================== 页脚 ==================== -->
+  <footer class="site-footer">
+    <p>赛题 11 · 反诈卫士 · 网络安全方向</p>
+    <p>静态原型 v0.1 · 仅用于比赛演示</p>
+  </footer>
+</body>
+</html>
