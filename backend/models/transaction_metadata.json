@@ -1,0 +1,131 @@
+{
+  "model_name": "LightGBM-IndianFinancialFraud",
+  "trained_at": "2026-11-27 19:46:47",
+  "rows": 250000,
+  "fraud_rows": 13473,
+  "metrics": {
+    "auc_roc": 0.9814,
+    "auc_pr": 0.8667,
+    "threshold": 0.8878,
+    "precision": 0.8882,
+    "recall": 0.6724,
+    "f1": 0.7654
+  },
+  "features": [
+    "Amount",
+    "LogAmount",
+    "CreditLimit",
+    "AmountToLimit",
+    "AmountOverLimit",
+    "CustomerAge",
+    "AnnualIncome",
+    "MerchantRating",
+    "TransactionHour",
+    "TransactionDayOfWeek",
+    "TransactionMonth",
+    "IsNight",
+    "IsInternational",
+    "StateMismatch",
+    "CityMismatch",
+    "CardExpired",
+    "CustomerTenureYears",
+    "MerchantRiskNum",
+    "CardType",
+    "CardNetwork",
+    "CardStatus",
+    "Contactless",
+    "CardMode",
+    "CustomerSegment",
+    "AccountType",
+    "PaymentMethod",
+    "TransactionChannel",
+    "DeviceType",
+    "TransactionStatus",
+    "MerchantRiskLevel",
+    "MerchantCategory",
+    "MerchantStatus"
+  ],
+  "top_features": [
+    {
+      "feature": "num__Amount",
+      "importance": 2440
+    },
+    {
+      "feature": "num__AnnualIncome",
+      "importance": 1774
+    },
+    {
+      "feature": "num__CustomerTenureYears",
+      "importance": 1648
+    },
+    {
+      "feature": "num__LogAmount",
+      "importance": 1627
+    },
+    {
+      "feature": "num__CreditLimit",
+      "importance": 1557
+    },
+    {
+      "feature": "num__AmountToLimit",
+      "importance": 1486
+    },
+    {
+      "feature": "num__CustomerAge",
+      "importance": 1378
+    },
+    {
+      "feature": "num__TransactionHour",
+      "importance": 1107
+    },
+    {
+      "feature": "num__TransactionMonth",
+      "importance": 932
+    },
+    {
+      "feature": "num__MerchantRating",
+      "importance": 883
+    },
+    {
+      "feature": "num__TransactionDayOfWeek",
+      "importance": 679
+    },
+    {
+      "feature": "cat__TransactionStatus_Successful",
+      "importance": 297
+    },
+    {
+      "feature": "num__IsInternational",
+      "importance": 296
+    },
+    {
+      "feature": "cat__MerchantCategory_Airline",
+      "importance": 250
+    },
+    {
+      "feature": "cat__TransactionStatus_Failed",
+      "importance": 243
+    },
+    {
+      "feature": "cat__MerchantCategory_Hospital",
+      "importance": 240
+    },
+    {
+      "feature": "cat__TransactionStatus_Declined",
+      "importance": 221
+    },
+    {
+      "feature": "cat__MerchantCategory_Food Delivery",
+      "importance": 216
+    },
+    {
+      "feature": "cat__MerchantCategory_Travel",
+      "importance": 187
+    },
+    {
+      "feature": "cat__CardStatus_Active",
+      "importance": 184
+    }
+  ],
+  "artifact": "backend/models/transaction_pipeline.joblib"
+}

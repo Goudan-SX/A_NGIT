@@ -19,14 +19,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from . import ai_common, analyzer, case_matcher, config, content_store, db, deepseek, ocr, qwen, repository
+from . import (ai_common, analyzer, case_matcher, config, content_store, db, deepseek,
+               ocr, qwen, repository, transaction_risk)
 
 STARTED_AT = time.time()
 
@@ -36,6 +37,7 @@ async def lifespan(_: FastAPI):
     try:
         db.ensure_database()
         created = case_matcher.seed_cases()
+        transaction_risk.ensure_rules()
         repository.add_log(
             level="success",
             event="system",
@@ -197,6 +199,7 @@ def health() -> dict[str, Any]:
         "database": database,
         "ai": _ai_status(),
         "cases": case_matcher.count_cases(),
+        "transaction_model": transaction_risk.model_info()["available"],
         "stores": {
             "text_cases": case_matcher.count_cases(),
             "image_cases": content_store.count_image_cases(),
@@ -212,6 +215,7 @@ def api_config() -> dict[str, Any]:
         "version": config.APP_VERSION,
         "ai": _ai_status(),
         "cases": case_matcher.count_cases(),
+        "transaction_model": transaction_risk.model_info()["available"],
         "stores": {
             "text_cases": case_matcher.count_cases(),
             "image_cases": content_store.count_image_cases(),
@@ -247,6 +251,35 @@ def api_stats() -> dict[str, Any]:
         return {"ok": True, **repository.stats()}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"读取统计数据失败：{exc}") from exc
+
+
+@app.post("/api/transaction/risk")
+def api_transaction_risk(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    try:
+        result = transaction_risk.predict(payload)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"交易风控推理失败：{exc}") from exc
+    _log_safe(
+        level="warning" if result["risk_level"] in {"high", "critical"} else "info",
+        event="transaction",
+        message=f"交易风控：{result['risk_label']} {result['risk_score']} 分",
+        meta={
+            "risk_score": result["risk_score"],
+            "matched_rules": [item["code"] for item in result["matched_rules"]],
+            "model_available": result["model_available"],
+        },
+    )
+    return {"ok": True, **result}
+
+
+@app.get("/api/transaction/model-info")
+def api_transaction_model_info() -> dict[str, Any]:
+    return {"ok": True, **transaction_risk.model_info()}
+
+
+@app.get("/api/transaction/rules")
+def api_transaction_rules() -> dict[str, Any]:
+    return {"ok": True, "items": transaction_risk.list_rules()}
 
 
 @app.get("/api/logs")

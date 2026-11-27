@@ -1,0 +1,72 @@
+[
+  {
+    "code": "CARD_STATUS_NONACTIVE",
+    "name": "失效/挂失/冻结卡交易",
+    "description": "卡片状态为 Blocked / Expired / Lost 仍发生交易",
+    "condition_json": "{\"field\": \"Card_Status\", \"op\": \"not_in\", \"value\": [\"Active\"]}",
+    "risk_weight": 40,
+    "support": 0.0196,
+    "fraud_rate": 1.0,
+    "lift": 18.56
+  },
+  {
+    "code": "AMOUNT_OVER_LIMIT",
+    "name": "交易金额超过信用额度",
+    "description": "单笔交易金额超过卡片信用额度，疑似超额盗刷",
+    "condition_json": "{\"field\": \"AmountToLimit\", \"op\": \"gte\", \"value\": 1.0}",
+    "risk_weight": 30,
+    "support": 0.0079,
+    "fraud_rate": 0.584,
+    "lift": 10.84
+  },
+  {
+    "code": "AUTH_FAILED",
+    "name": "多次失败/拒绝授权",
+    "description": "交易状态为 Failed / Declined，疑似撞库或连续试探",
+    "condition_json": "{\"field\": \"Transaction_Status\", \"op\": \"in\", \"value\": [\"Failed\", \"Declined\"]}",
+    "risk_weight": 25,
+    "support": 0.0887,
+    "fraud_rate": 0.4656,
+    "lift": 8.64
+  },
+  {
+    "code": "INTERNATIONAL",
+    "name": "跨境/国际交易",
+    "description": "跨境交易且金额异常，需二次核验",
+    "condition_json": "{\"field\": \"Is_International\", \"op\": \"eq\", \"value\": 1}",
+    "risk_weight": 15,
+    "support": 0.0503,
+    "fraud_rate": 0.1969,
+    "lift": 3.65
+  },
+  {
+    "code": "HIGH_AMOUNT",
+    "name": "大额交易",
+    "description": "交易金额超过数据集中 95% 分位（63379.67）",
+    "condition_json": "{\"field\": \"Transaction_Amount\", \"op\": \"gte\", \"value\": 63379.67}",
+    "risk_weight": 12,
+    "support": 0.05,
+    "fraud_rate": 0.2451,
+    "lift": 4.55
+  },
+  {
+    "code": "HIGH_RISK_MERCHANT",
+    "name": "高风险商户大额交易",
+    "description": "高风险商户且金额高于中位数，疑似商户侧欺诈",
+    "condition_json": "{\"all\": [{\"field\": \"Merchant_Risk_Level\", \"op\": \"eq\", \"value\": \"High\"}, {\"field\": \"Transaction_Amount\", \"op\": \"gte\", \"value\": 3155.26}]}",
+    "risk_weight": 8,
+    "support": 0.0647,
+    "fraud_rate": 0.0768,
+    "lift": 1.42
+  },
+  {
+    "code": "NIGHT_GEO_MISMATCH",
+    "name": "深夜异地异常",
+    "description": "凌晨 0-6 点且客户与商户所在地不一致",
+    "condition_json": "{\"all\": [{\"field\": \"IsNight\", \"op\": \"eq\", \"value\": 1}, {\"field\": \"StateMismatch\", \"op\": \"eq\", \"value\": 1}]}",
+    "risk_weight": 4,
+    "support": 0.2385,
+    "fraud_rate": 0.0547,
+    "lift": 1.01
+  }
+]

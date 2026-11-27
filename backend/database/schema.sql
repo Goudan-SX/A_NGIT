@@ -128,6 +128,44 @@ IF COL_LENGTH('dbo.text_cases', 'reviewed_at') IS NULL
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_cases_active' AND object_id = OBJECT_ID('dbo.text_cases'))
     CREATE INDEX IX_cases_active ON dbo.text_cases(is_active, risk_score DESC);
 
+-- 交易风控规则库：由金融欺诈数据集提炼，供表格模型/规则引擎使用
+IF OBJECT_ID('dbo.transaction_rules', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.transaction_rules (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        code            NVARCHAR(64) NOT NULL,
+        name            NVARCHAR(120) NOT NULL,
+        description     NVARCHAR(500) NOT NULL,
+        condition_json  NVARCHAR(MAX) NOT NULL,
+        risk_weight     INT NOT NULL,
+        support         DECIMAL(10, 4) NULL,
+        fraud_rate      DECIMAL(10, 4) NULL,
+        lift            DECIMAL(10, 2) NULL,
+        source          NVARCHAR(64) NOT NULL CONSTRAINT DF_txn_rules_source DEFAULT 'indian_financial_fraud',
+        is_active       BIT NOT NULL CONSTRAINT DF_txn_rules_active DEFAULT 1,
+        created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_txn_rules_created DEFAULT SYSDATETIME(),
+        updated_at      DATETIME2(0) NOT NULL CONSTRAINT DF_txn_rules_updated DEFAULT SYSDATETIME(),
+        CONSTRAINT UQ_txn_rules_code UNIQUE (code)
+    );
+END
+
+-- 交易模型训练记录
+IF OBJECT_ID('dbo.transaction_models', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.transaction_models (
+        id              INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        model_name      NVARCHAR(120) NOT NULL,
+        trained_at      DATETIME2(0) NOT NULL CONSTRAINT DF_txn_models_trained DEFAULT SYSDATETIME(),
+        rows_count      INT NOT NULL,
+        fraud_count     INT NOT NULL,
+        auc_roc         DECIMAL(8, 4) NULL,
+        auc_pr          DECIMAL(8, 4) NULL,
+        threshold       DECIMAL(8, 4) NULL,
+        artifact_path   NVARCHAR(300) NULL,
+        metrics_json    NVARCHAR(MAX) NULL
+    );
+END
+
 -- 图片案例库：保存图片指纹、OCR 文本与视觉研判结果
 IF OBJECT_ID('dbo.image_cases', 'U') IS NULL
 BEGIN

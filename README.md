@@ -71,6 +71,7 @@
 | 数据访问 | pyodbc |
 | 图片处理 | Pillow + Windows.Media.Ocr（本地兜底） |
 | 多模态 AI | DeepSeek V4.1 Flash：`deepseek-flash`（文本 + 视觉）；Qwen：`qwen3-asr-flash`（语音，可选） |
+| 交易风控 | LightGBM 4.7 + scikit-learn 1.9 + joblib |
 
 ---
 
@@ -104,6 +105,8 @@ A_NGIT/
 │   │   ├── db.py                  # SQL Server 连接与建库
 │   │   ├── repository.py          # 数据仓储层
 │   │   └── config.py              # 环境变量与路径
+│   ├── ml/                        # 交易风控特征工程与训练脚本
+│   ├── models/                    # LightGBM 模型、元数据、规则 JSON
 │   ├── database/schema.sql        # 表结构 + 科普种子数据
 │   ├── data/                      # 上传文件与缩略图（不提交）
 │   ├── seed_demo.py               # 演示数据初始化
@@ -256,7 +259,20 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 ---
 
-## 八、主要 API
+## 八、交易风控模型（附加）
+
+Kaggle Indian Financial Fraud Dataset 是 4 张表、25 万条合成交易、约 5.39% 欺诈的表格数据，不含聊天话术。
+
+- 模型：LightGBM 二分类，输出交易欺诈概率；
+- 规则：从 Fraud_Reason 与数据分布提炼 7 条规则，写入 transaction_rules；
+- 指标：AUC-ROC 0.9814，AUC-PR 0.8667，阈值 0.8878，F1 0.7654；
+- 注意：不用于微调 DeepSeek LLM；话术识别仍走 text_cases。
+
+训练：python backend/ml/train_transaction_model.py --data-dir backend/data/indian_fraud
+
+接口：POST /api/transaction/risk、GET /api/transaction/model-info、GET /api/transaction/rules。
+
+## 九、主要 API
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -274,6 +290,9 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 | GET | `/api/reports/{id}/download` | 下载举报材料 |
 | GET | `/api/stats` | 检测统计 |
 | GET | `/api/logs` | 运行日志分页与筛选 |
+| POST | `/api/transaction/risk` | 交易欺诈概率 + 规则命中 + 风险等级 |
+| GET | `/api/transaction/model-info` | 交易模型指标与可用状态 |
+| GET | `/api/transaction/rules` | 交易风控规则列表 |
 | GET | `/api/logs/stats` | 日志级别统计 |
 | GET | `/api/knowledge` | 科普内容 |
 
@@ -281,7 +300,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 ---
 
-## 九、数据库
+## 十、数据库
 
 数据库：`AntiFraudGuard`
 
@@ -301,7 +320,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 ---
 
-## 十、演示建议
+## 十一、演示建议
 
 1. 打开首页，默认示例文本会立即得到 86% 左右的高风险结论；
 2. 指出五个评分维度、命中的证据原文、风险等级；
@@ -313,7 +332,7 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 ---
 
-## 十一、安全与限制
+## 十二、安全与限制
 
 - 所有 PII 在接口返回前已打码，原始值不通过 API 返回；一键脱敏后原文本会立即替换。
 - 举报材料不会自动提交给官方平台，只生成可复制的结构化文本，避免误报与越权。
@@ -324,14 +343,14 @@ QWEN_AUDIO_MODEL=qwen3-asr-flash
 
 ---
 
-## 十二、代码规范
+## 十三、代码规范
 
 - 前端 2 空格缩进，CSS 使用 BEM 命名，颜色/圆角/字体统一收敛到 `:root` 变量；
 - 后端按 `config → db/repository → analyzer/qwen/ocr → main` 分层，路由不直接写 SQL；
 - 分析结果统一为 JSON，保留维度、证据、建议与引擎信息，方便前端渲染与答辩讲解；
 - 提交信息建议使用 `feat:` / `fix:` / `style:` / `docs:` 前缀。
 
-## 十三、团队协作
+## 十四、团队协作
 
 - 仓库默认分支：`main`；
 - 建议每人使用独立分支，例如 `feature/analysis-engine`；
