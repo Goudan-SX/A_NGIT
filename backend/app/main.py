@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -481,7 +481,7 @@ def _review_case_with_ai(text: str, case: dict[str, Any],
 
 
 def _analyze_text_with_case(text: str, errors: list[str] | None = None,
-                            skip_ai: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+                            skip_ai: bool = False, force_ai: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     """Guardian-AI 分层过滤：
 
     1. 短 TTL 缓存直接返回；
@@ -490,7 +490,7 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
     4. 只有模糊文本才调用 DeepSeek 精判。
     """
     normalized = preprocess_text(text)
-    mode = "fast" if skip_ai else "full"
+    mode = "fast" if skip_ai else ("full-force" if force_ai else "full")
     cache_key = hashlib.sha256((mode + ":" + normalized).encode("utf-8")).hexdigest()
     cached_bundle = result_cache.text_cache.get(cache_key)
     if cached_bundle:
@@ -570,7 +570,7 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
         "review_provider": None,
     }
 
-    if skip_ai or guardian.is_decisive(result):
+    if skip_ai or (guardian.is_decisive(result) and not force_ai):
         result["engine"] = {
             "name": "guardian-rule",
             "ai": False,
@@ -591,19 +591,47 @@ def _analyze_text_with_case(text: str, errors: list[str] | None = None,
     return result, match
 
 
+def _refine_monitor(payload: MonitorAnalyzeRequest) -> None:
+    """后台 AI 二次审查；不阻塞托盘首次返回。"""
+    try:
+        result, match = _analyze_text_with_case(payload.text, skip_ai=False, force_ai=True)
+        result = analyzer.build_hit_contract(result, payload.text)
+        result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        result["match"] = match
+        safe_text = analyzer.mask_text(payload.text, result)
+        monitor_state.publish(
+            text=safe_text,
+            result=result,
+            source="tray-ai",
+            window=payload.window,
+        )
+        if payload.window:
+            conversation_store.save(
+                contact_id=payload.window,
+                contact_name=payload.window,
+                window_title=payload.window,
+                text=safe_text,
+                result=result,
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @app.post("/api/monitor/analyze")
-def api_monitor_analyze(payload: MonitorAnalyzeRequest) -> dict[str, Any]:
-    """托盘专用快速通道：只跑本地规则，立即返回并同步 Web。"""
-    result = analyzer.analyze_text(payload.text)
+def api_monitor_analyze(payload: MonitorAnalyzeRequest, background: BackgroundTasks) -> dict[str, Any]:
+    """托盘自动检测：先数据库/本地规则给可能性，再后台 AI 二次审查。"""
+    result, match = _analyze_text_with_case(payload.text, skip_ai=True)
     result = analyzer.build_hit_contract(result, payload.text)
     result["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    result["match"] = match
     safe_text = analyzer.mask_text(payload.text, result)
     item = monitor_state.publish(
         text=safe_text,
         result=result,
-        source="tray-local",
+        source="tray-database",
         window=payload.window,
     )
+    background.add_task(_refine_monitor, payload)
     return {"ok": True, "analysis": result, "item": item}
 
 

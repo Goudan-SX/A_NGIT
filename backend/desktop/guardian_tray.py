@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import os
@@ -211,6 +212,30 @@ def collect_chat_texts(control, pane_left: int, top_y: int, deadline: float,
     return rows
 
 
+def _ocr_region(crop: tuple[int, int, int, int], mask_overlay: bool = False) -> str:
+    from PIL import ImageGrab, ImageDraw
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
+        path = handle.name
+    try:
+        image = ImageGrab.grab(bbox=crop)
+        if mask_overlay:
+            # 去掉右下角告警浮层，避免把浮层文字当成聊天内容。
+            screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+            screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+            box = (screen_w - 454 - crop[0], screen_h - 206 - crop[1],
+                   screen_w - 24 - crop[0], screen_h - 56 - crop[1])
+            ImageDraw.Draw(image).rectangle(box, fill=(255, 255, 255))
+        image.save(path, "PNG")
+        return ocr.extract_text(path, timeout=20)
+    except Exception:  # noqa: BLE001
+        return ""
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tuple[str, list[str]] | None:
     """WeChat 等自绘窗口 UIA 读不到文字时，只 OCR 聊天主区域。"""
     global _last_ocr_at
@@ -219,31 +244,22 @@ def ocr_chat_snapshot(rect: tuple[int, int, int, int], window_title: str) -> tup
         return None
     _last_ocr_at = now
     left, top, right, bottom = rect
-    crop = (left + int((right - left) * 0.25), top + 25, right, bottom)
-    from PIL import ImageGrab
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
-        path = handle.name
-    try:
-        ImageGrab.grab(bbox=crop).save(path, "PNG")
-        text = ocr.extract_text(path, timeout=20)
-    except Exception:  # noqa: BLE001
-        text = ""
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
-    if not lines:
-        return None
+    pane_left = left + int((right - left) * 0.25)
+    header_text = _ocr_region((pane_left, top + 30, right, top + 125))
+    body_text = _ocr_region((pane_left, top + 115, right, bottom), mask_overlay=True)
+    header_lines = [line.strip() for line in (header_text or "").splitlines() if line.strip()]
     contact = window_title or "未知用户"
-    if len(lines[0]) <= 60 and not re.fullmatch(r"\d{1,2}:\d{2}", lines[0]):
-        contact = lines[0][:60]
+    for line in header_lines:
+        if len(line) <= 60 and line not in {"微信", "WeChat", "搜索", "发送"} and not re.fullmatch(r"\d{1,2}:\d{2}", line):
+            contact = line[:60]
+            break
+    lines = [line.strip() for line in (body_text or "").splitlines() if line.strip()]
+    if lines and len(lines[0]) <= 60 and lines[0] == contact:
         lines = lines[1:]
     messages = []
     for value in lines:
         value = re.sub(r"^\d{1,2}:\d{2}\s*", "", value).strip()
-        if value and value not in {"发送", "搜索", "长按鼠标", "语音输入", "表情", "微信"}:
+        if value and value not in {"发送", "搜索", "长按鼠标", "语音输入", "表情", "微信"} and value != contact:
             messages.append(value[:500])
     if not messages:
         return None
